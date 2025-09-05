@@ -53,20 +53,26 @@
   }
   .site-card:hover .site-thumb{transform:scale(1.02)}
 
-  /* Overlay container; only on selected */
+  /* Overlay container — align to bottom */
   .overlay{
-    position:absolute; inset:0; display:flex; align-items:flex-end;
-    padding:10px; pointer-events:none;
-    background:none;
+    position:absolute; inset:0;
+    display:flex; align-items:flex-end; justify-content:center;
+    padding:12px; pointer-events:none; background:none;
   }
   .site-card[aria-checked="true"] .overlay{
-    background:linear-gradient(to top, rgba(0,0,0,.45), rgba(0,0,0,0) 60%);
+    background:linear-gradient(to top, rgba(0,0,0,.35), rgba(0,0,0,0) 60%);
   }
 
-  /* Label pill */
+  /* Label bubble */
   .label{
-    background:rgba(255,255,255,.92); color:#0f172a;
-    border-radius:10px; padding:6px 10px; font-weight:800; max-width:100%;
+    background:rgba(255,255,255,.78);
+    color:#0f172a; font-weight:800; text-align:center;
+    border-radius:12px; padding:6px 12px;
+    inline-size:max-content;
+    max-inline-size: min(95%, 22ch);
+    margin-inline:auto;
+    line-height:1.2; word-break:break-word;
+    box-shadow:0 2px 8px rgba(0,0,0,.15);
   }
 
   /* Check icon */
@@ -202,52 +208,24 @@
     else          { root.classList.remove('has-selection'); }
   }
 
-  function getCurrentIndex(){
-    const cards = [...siteGrid.querySelectorAll('.site-card')];
-    return Math.max(0, cards.findIndex(c => c.getAttribute('aria-checked') === 'true'));
-  }
-
-  function moveFocus(delta){
-    const cards = [...siteGrid.querySelectorAll('.site-card')];
-    let i = getCurrentIndex();
-    if(i === -1) i = 0;
-    let n = (i + delta + cards.length) % cards.length;
-    cards[n].focus();
-  }
-
   renderGrid();
 
   // Prefill saved selection
   const savedId = localStorage.getItem(LS_KEY);
   if(savedId && SITES.some(s=>s.id===savedId)){ updateSelection(savedId, false); }
 
-  // Selection events
   siteGrid.addEventListener('click', (e)=>{
     const card = e.target.closest('.site-card');
     if(!card) return;
     updateSelection(card.dataset.id);
   });
 
-  siteGrid.addEventListener('keydown', (e)=>{
-    const key = e.key;
-    if(key === 'ArrowRight' || key === 'ArrowDown'){ e.preventDefault(); moveFocus(1); }
-    if(key === 'ArrowLeft'  || key === 'ArrowUp'){   e.preventDefault(); moveFocus(-1); }
-    if(key === ' ' || key === 'Enter'){
-      e.preventDefault();
-      const active = document.activeElement.closest('.site-card');
-      if(active) updateSelection(active.dataset.id, false);
-    }
-  });
-
-  // Continue -> route to the correct page within same folder
   continueBtn.addEventListener('click', ()=>{
     if(!selectedId) return;
     localStorage.setItem(LS_KEY, selectedId);
-    const target = pageForSite(selectedId);
-    window.location.href = target;
+    window.location.href = pageForSite(selectedId);
   });
 
-  // Clear selection
   clearBtn.addEventListener('click', ()=>{
     localStorage.removeItem(LS_KEY);
     selectedId = null;
