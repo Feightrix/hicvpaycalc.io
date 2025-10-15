@@ -19,8 +19,17 @@
 
   /* Header */
   .app-header{position:sticky; top:0; z-index:10; background:linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.85)); border-bottom:1px solid var(--border)}
-  .header-row{display:flex; align-items:center; justify-content:flex-start; height: clamp(52px, 7vw, 96px);}
+  .header-row{display:flex; align-items:center; justify-content:space-between; gap:12px; height: clamp(52px, 7vw, 96px);}
   .logo-img{display:block; height: calc(100% - 10px); width:auto; object-fit:contain; max-width:100%}
+  .header-btn{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:8px 14px; border-radius:999px; text-decoration:none;
+    font-weight:800; border:1px solid var(--border); color:var(--green); background:#fff;
+    box-shadow:var(--shadow);
+    white-space:nowrap;
+  }
+  .header-btn:hover{background:rgba(27,94,32,.06)}
+  .header-btn svg{width:18px;height:18px;display:block;stroke:currentColor;fill:none;stroke-width:2}
 
   /* Card shell */
   main{flex:1; display:grid; place-items:start; padding:24px 0}
@@ -128,6 +137,11 @@
 <header class="app-header">
   <div class="container header-row">
     <img src="https://logowik.com/content/uploads/images/holiday-inn-club-vacations8035.jpg" alt="Holiday Inn Club Vacations Logo" class="logo-img">
+    <a class="header-btn" href="index.html" title="Back to Calculator Selection">
+      <!-- left arrow icon -->
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+      Calculator Selection
+    </a>
   </div>
 </header>
 
