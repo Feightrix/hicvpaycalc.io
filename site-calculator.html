@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monthly Tour Budget — Tours Only</title>
+<style>
+  :root{
+    --green:#1B5E20; --green-600:#124318; --orange:#FF7A00;
+    --paper:#FFFFFF; --ink:#1f2937; --muted:#6b7280;
+    --border:#e5e7eb; --shadow:0 8px 28px rgba(0,0,0,.08), 0 2px 8px rgba(0,0,0,.05);
+    --ok:#10b981; --bad:#ef4444;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0; width:100%; min-width:100%; color:var(--ink); font-family:ui-sans-serif,system-ui; background:#f8fafc; display:flex; flex-direction:column; min-height:100vh;}
+  body.no-scroll{overflow:hidden}
+
+  /* Header */
+  .app-header{position: sticky; top:0; z-index:20; background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.85)); border-bottom: 1px solid var(--border);}
+  .container{max-width:1100px; width:100%; margin:0 auto; padding:0 16px;}
+  .header-row{display:flex;align-items:center;justify-content:space-between;gap:12px; height: clamp(52px, 7vw, 96px);}
+  .logo-img{display:block; height: calc(100% - 10px); width:auto; object-fit:contain; max-width:100%}
+  .icon-btn{appearance:none;border:0;background:transparent;padding:6px;margin:0;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;cursor:pointer}
+  .icon-btn:hover{background:rgba(27,94,32,.08)} .icon-btn:active{background:rgba(27,94,32,.12)}
+  .icon{width:24px;height:24px;stroke:var(--green-600);stroke-width:2;fill:none}
+
+  /* Layout / Cards */
+  .grid{display:grid;gap:18px;grid-template-columns:1fr}
+  @media(min-width:900px){.grid{grid-template-columns:1.05fr .95fr;align-items:start}}
+  .stack{display:grid;gap:18px}
+  .card{background:var(--paper);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow)}
+  .card .card-header{
+    padding:16px 20px 10px;border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg, color-mix(in srgb, var(--green) 7%, #fff), #fff 80%);border-left:4px solid var(--orange);border-top-left-radius:14px;
+    display:flex; align-items:flex-end; justify-content:space-between
+  }
+  .card .card-header h2{margin:0;font-size:18px;color:var(--green-600)}
+  .card .card-body{padding:18px 20px}
+
+  /* Fields & Buttons */
+  .field{display:grid;gap:8px;margin-bottom:14px}
+  .input{display:flex;align-items:center;background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.04)}
+  .input input,.input select{width:100%;border:0;outline:0;font-size:16px;background:transparent;color:var(--ink)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:8px 14px;font-weight:700;border:1px solid var(--border);background:#fff;color:var(--green);cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .helper{font-size:12px;color:#6b7280;margin-top:6px}
+  .success{color:var(--ok)}
+  .good{color:var(--ok)}
+  .bad{color:var(--bad)}
+
+  /* KPIs */
+  .kpi{display:grid; gap:14px; grid-template-columns: 1fr 1fr}
+  @media(min-width:760px){ .kpi{grid-template-columns: repeat(8, 1fr)} } /* Summary has 8 boxes */
+  .kpi-snap{display:grid; gap:14px; grid-template-columns: 1fr 1fr}
+  @media(min-width:760px){ .kpi-snap{grid-template-columns: repeat(4, 1fr)} } /* Snapshot shows 4 boxes */
+  .kpi .box, .kpi-snap .box{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px; position:relative}
+  .kpi .label, .kpi-snap .label{font-size:12px;color:#6b7280}
+  .kpi .value, .kpi-snap .value{font-size:34px;font-weight:900;margin-top:6px}
+
+  /* Progress-border KPI (% of Budget) */
+  .progress-border::after{
+    content:"";
+    position:absolute; left:-1px; top:-1px;
+    height:6px; width:calc(var(--pct,0) * 1% + 2px);
+    background:var(--ok);
+    border-top-left-radius:12px;
+    border-top-right-radius:6px;
+    pointer-events:none;
+  }
+
+  /* Subtitle */
+  .subtitle{font-weight:800;color:var(--green-600);font-size:16px;margin:4px 0 10px}
+  .big-pct{font-size:34px;font-weight:900;}
+
+  footer{margin-top:auto;padding:12px 0;text-align:center;font-size:13px;color:#bbb;}
+
+  /* Slide-over menu */
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,.28);display:none;z-index:30}
+  .overlay.show{display:block}
+  .panel{
+    position:absolute; right:0; top:0; height:100dvh; width:min(90vw,460px);
+    background:#fff; border-left:1px solid var(--border);
+    box-shadow:-16px 0 40px rgba(0,0,0,.18);
+    display:flex; flex-direction:column;
+    transform:translateX(100%); transition:transform .28s ease;
+  }
+  .overlay.show .panel{transform:translateX(0)}
+  .panel-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,color-mix(in srgb, var(--green) 7%, #fff),#fff 80%)}
+  .panel-header h3{margin:0;font-size:16px;color:var(--green-600)}
+  .panel-body{flex:1; overflow-y:auto; overflow-x:hidden; padding:14px 16px; display:flex; flex-direction:column; gap:12px;}
+  .panel-footer{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:space-between;background:#fff}
+  .menu-row{display:flex;gap:8px;flex-wrap:wrap}
+  .menu-btn{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;color:#000;font-weight:700;cursor:pointer}
+  .menu-btn.active{background:rgba(27,94,32,.12);color:var(--green-600);border-color:rgba(27,94,32,.2)}
+  .menu-section{border:1px solid var(--border);border-radius:12px;background:#fff}
+  .menu-section-body{padding:12px}
+
+  /* Compact daily editor */
+  #editorTable{width:100%; border-collapse:collapse; table-layout:auto;}
+  #editorTable th,#editorTable td{padding:8px 10px; border-bottom:1px solid var(--border); text-align:left}
+  #editorTable thead th{background:#f3f7f4;color:var(--green-600);font-size:12px;text-transform:uppercase}
+  #editorTable th:first-child, #editorTable td:first-child{width:80px; white-space:nowrap;}
+  #editorTable td input[type="number"]{
+    width:64px; max-width:64px; min-width:54px;
+    padding:6px 8px; border:1px solid var(--border); border-radius:8px; background:#fff; color:#111827; text-align:right;
+    -moz-appearance:textfield;
+  }
+  #editorTable td input[type="number"]::-webkit-outer-spin-button,
+  #editorTable td input[type="number"]::-webkit-inner-spin-button{
+    -webkit-appearance: none; margin: 0;
+  }
+  @media (max-width:760px){
+    .kpi{grid-template-columns: 1fr 1fr}
+    .kpi-snap{grid-template-columns: 1fr 1fr}
+  }
+  @media (max-width:520px){
+    .panel{width:100vw}
+    #editorTable th:first-child, #editorTable td:first-child{width:72px}
+    #editorTable td input[type="number"]{width:58px; max-width:58px}
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="container header-row">
+    <img src="https://logowik.com/content/uploads/images/holiday-inn-club-vacations8035.jpg" alt="Holiday Inn Club Vacations Logo" class="logo-img">
+    <button class="icon-btn" id="menuBtn" aria-label="Open menu"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+  </div>
+</header>
+
+<main class="container" style="padding-top:16px;">
+  <div class="grid">
+
+    <!-- SNAPSHOT (top) -->
+    <section class="card">
+      <div class="card-header"><h2>Snapshot</h2></div>
+      <div class="card-body">
+        <div class="subtitle">Selected Month</div>
+        <div class="field">
+          <div class="input">
+            <select id="month" aria-label="Select month">
+              <option>January</option><option>February</option><option>March</option>
+              <option>April</option><option>May</option><option>June</option>
+              <option>July</option><option>August</option><option>September</option>
+              <option>October</option><option>November</option><option>December</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="subtitle">Running % of Standard MTD</div>
+        <!-- Snapshot KPI boxes -->
+        <div class="kpi-snap">
+          <div class="box">
+            <div class="label">Running % of Standard</div>
+            <div class="value" id="runStdPct">—</div>
+          </div>
+          <div class="box">
+            <div class="label">Variance</div>
+            <div class="value" id="runVariance">—</div>
+          </div>
+          <div class="box">
+            <div class="label">MTD Actual</div>
+            <div class="value" id="runMTDActual">—</div>
+          </div>
+          <div class="box">
+            <div class="label">Projected-to-date</div>
+            <div class="value" id="runProjected">—</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT COLUMN (stack): Today's Tours + Summary -->
+    <div class="stack">
+
+      <!-- Today's Tours -->
+      <section class="card">
+        <div class="card-header"><h2>Today’s Tours</h2></div>
+        <div class="card-body">
+          <div id="todayBigDate" class="big-pct" style="margin-bottom:6px">—</div>
+          <div class="subtitle">Today’s Showed Tours</div>
+          <div class="field" style="margin-top:-2px">
+            <div class="input"><input id="todayTours" type="number" min="0" step="1" placeholder="0" inputmode="numeric" aria-label="Today’s Showed Tours"></div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
+            <button class="btn" id="submitToday">Submit</button>
+            <button class="btn" id="openDaily">Edit Daily Goals & Actuals</button>
+            <span id="pushStatus" class="helper" aria-live="polite"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Summary -->
+      <section class="card">
+        <div class="card-header"><h2>Summary</h2></div>
+        <div class="card-body">
+          <!-- Days remaining subtitle -->
+          <div class="subtitle" id="daysSubtitle">—</div>
+
+          <div class="kpi">
+            <div class="box">
+              <div class="label">Budget</div>
+              <div class="value" id="budgetTours">—</div>
+            </div>
+            <div class="box">
+              <div class="label">Team Goal</div>
+              <div class="value" id="teamGoalTours">—</div>
+            </div>
+            <div class="box">
+              <div class="label">Remaining to Team</div>
+              <div class="value" id="remainingTours">—</div>
+            </div>
+            <div class="box">
+              <div class="label">Daily Average</div>
+              <div class="value" id="toursPerDay">—</div>
+            </div>
+
+            <!-- % of Budget with progress border -->
+            <div class="box progress-border" id="officialPctBox" style="--pct:0">
+              <div class="label">% of Budget</div>
+              <div class="value" id="officialPctValue">—</div>
+            </div>
+
+            <div class="box">
+              <div class="label">% of Standard</div>
+              <div class="value" id="stdBoxValue">—</div>
+            </div>
+
+            <!-- Overrides -->
+            <div class="box">
+              <div class="label">Lead Override</div>
+              <div class="value" id="leadOverrideValue">—</div>
+            </div>
+            <div class="box">
+              <div class="label">Manager Override</div>
+              <div class="value" id="mgrOverrideValue">—</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</main>
+
+<footer>Created by Aaron Feight 2025</footer>
+
+<!-- Slide-over Menu (Daily editor) -->
+<div class="overlay" id="menuOverlay">
+  <aside class="panel" role="dialog" aria-modal="true" aria-labelledby="editorTitle">
+    <div class="panel-header">
+      <h3 id="editorTitle">Daily Goals (Goal & Actual)</h3>
+      <button class="icon-btn" id="closeMenu" aria-label="Close menu"><svg class="icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+
+    <div class="panel-body">
+      <div class="menu-row" role="tablist" aria-label="Settings sections">
+        <button class="menu-btn active" data-target="sectionDaily" role="tab" aria-selected="true" aria-controls="sectionDaily">Daily Goals</button>
+      </div>
+
+      <div id="sectionDaily" class="menu-section" role="tabpanel">
+        <div class="menu-section-body">
+          <table class="editor" id="editorTable">
+            <thead>
+              <tr>
+                <th style="width:80px">Date</th>
+                <th>Goal</th>
+                <th>Actual</th>
+              </tr>
+            </thead>
+            <tbody><!-- injected --></tbody>
+            <tfoot>
+              <tr>
+                <td>Total</td>
+                <td id="sumGoal">0</td>
+                <td id="sumActual">0</td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+            <button class="btn" id="clearAll">Clear All</button>
+            <button class="btn" id="importCsv">Import CSV</button>
+            <input type="file" id="csvFile" accept=".csv,text/csv" style="display:none">
+          </div>
+          <div id="importStatus" class="helper" aria-live="polite"></div>
+          <details class="helper" style="margin-top:6px">
+            <summary>CSV format help</summary>
+            <div style="margin-top:6px">
+              One row per day. Examples:<br>
+              <code>9/1, 30, 28</code><br>
+              <code>9/1/2025, 30, 28</code><br>
+              Header row optional. Rows outside the selected month are ignored.
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-footer">
+      <button class="btn" id="resetMonth" type="button">Reset (empty)</button>
+      <div style="display:flex; gap:10px;">
+        <button class="btn" id="cancelEdit" type="button">Cancel</button>
+        <button class="btn" id="saveAll" type="button" style="background:var(--green);color:#fff;border-color:var(--green)">Save</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+(() => {
+  /* ===== Storage Keys ===== */
+  const LS_SELECTED_MONTH = 'selectedMonth';
+  const LS_DAILY_DATA = 'dailyGoalsActuals'; // { "Month-YYYY": {goals:[], actuals:[]} }
+
+  /* ===== Constants ===== */
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const MANAGER_RATE = 4.5; // $4.50 per tour (updated)
+
+  /* ===== DOM ===== */
+  // Snapshot (month + running standard)
+  const monthSel = document.getElementById('month');
+  const runStdPctEl = document.getElementById('runStdPct');
+  const runMTDActual = document.getElementById('runMTDActual');
+  const runProjected = document.getElementById('runProjected');
+  const runVariance = document.getElementById('runVariance');
+
+  // Today's tours quick entry
+  const todayBigDate = document.getElementById('todayBigDate');
+  const todayToursInput = document.getElementById('todayTours');
+  const submitTodayBtn = document.getElementById('submitToday');
+  const pushStatus = document.getElementById('pushStatus');
+  const openDailyBtn = document.getElementById('openDaily');
+
+  // Summary nodes
+  const daysSubtitle = document.getElementById('daysSubtitle');
+  const budgetTours = document.getElementById('budgetTours');
+  const teamGoalTours = document.getElementById('teamGoalTours');
+  const remainingTours = document.getElementById('remainingTours');
+  const toursPerDay = document.getElementById('toursPerDay');
+  const officialPctBox = document.getElementById('officialPctBox');
+  const officialPctValue = document.getElementById('officialPctValue');
+  const stdBoxValue = document.getElementById('stdBoxValue');
+  const leadOverrideValue = document.getElementById('leadOverrideValue');
+  const mgrOverrideValue = document.getElementById('mgrOverrideValue');
+
+  // Menu (editor)
+  const menuBtn = document.getElementById('menuBtn');
+  const overlay = document.getElementById('menuOverlay');
+  const closeMenu = document.getElementById('closeMenu');
+  const cancelEdit = document.getElementById('cancelEdit');
+  const saveAllBtn = document.getElementById('saveAll');
+  const resetMonthBtn = document.getElementById('resetMonth');
+
+  const editorTableBody = document.querySelector('#editorTable tbody');
+  const clearAllBtn = document.getElementById('clearAll');
+  const sumGoal = document.getElementById('sumGoal');
+  const sumActual = document.getElementById('sumActual');
+
+  const importCsvBtn = document.getElementById('importCsv');
+  const csvFileInput = document.getElementById('csvFile');
+  const importStatus = document.getElementById('importStatus');
+
+  /* ===== State / Helpers ===== */
+  let dailyDataMap = JSON.parse(localStorage.getItem(LS_DAILY_DATA) || '{}'); // key-> {goals:[], actuals:[]}
+  const fmtInt = n => (isFinite(n) ? Math.round(n).toLocaleString() : '—');
+  const fmtSigned = n => (n>0?`+${fmtInt(n)}`: n<0?`-${fmtInt(Math.abs(n))}` : '0');
+  const clamp = (n,min,max)=>Math.min(Math.max(n,min),max);
+  const monthIndex = (name) => MONTHS.indexOf(name);
+
+  // currency helpers
+  const currencyWhole = v => (+v || 0).toLocaleString(undefined,{
+    style:'currency', currency:'USD', minimumFractionDigits:0, maximumFractionDigits:0
+  });
+  const currency = v => (+v || 0).toLocaleString(undefined,{style:'currency',currency:'USD'});
+
+  const today = new Date(); // always now
+  const currentYear = today.getFullYear();
+
+  // Format "Oct. 1, 2025" (month short with period)
+  function formatDateWithPeriod(d){
+    const s = d.toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'});
+    return s.replace(/^([A-Za-z]+)(\s)/, (m, mth, sp) => (mth.endsWith('.') ? mth : mth + '.') + sp);
+  }
+  todayBigDate.textContent = formatDateWithPeriod(today);
+
+  function monthYearKey(monthName, year){ return `${monthName}-${year}`; }
+  function daysInMonthByName(monthName, year){
+    const m = monthIndex(monthName);
+    return new Date(year, m+1, 0).getDate();
+  }
+  function labelMD(monthNum0, day){ return `${monthNum0+1}/${day}`; }
+
+  // Return [elapsedDaysIncludingToday, totalDays]
+  function dayPositionForSelectedMonth(asOf, selectedMonthName, year){
+    const selIdx = monthIndex(selectedMonthName);
+    const asofIdx = asOf.getMonth();
+    const totalDays = daysInMonthByName(selectedMonthName, year);
+
+    let elapsed;
+    if (asofIdx === selIdx && asOf.getFullYear() === year) {
+      elapsed = Math.min(asOf.getDate(), totalDays); // include today
+    } else if (asOf.getFullYear() > year || (asOf.getFullYear() === year && asofIdx > selIdx)) {
+      elapsed = totalDays; // month in the past
+    } else {
+      elapsed = 0; // month in the future
+    }
+    return [elapsed, totalDays];
+  }
+
+  /* ===== Daily Data ===== */
+  function ensureDailyData(month, year){
+    const key = monthYearKey(month, year);
+    const dcount = daysInMonthByName(month, year);
+    let rec = dailyDataMap[key];
+    if(!rec || !Array.isArray(rec.goals) || !Array.isArray(rec.actuals)){
+      rec = {goals:new Array(dcount).fill(0), actuals:new Array(dcount).fill(0)};
+    }else{
+      if(rec.goals.length !== dcount){ rec.goals = [...rec.goals, ...new Array(dcount).fill(0)].slice(0, dcount); }
+      if(rec.actuals.length !== dcount){ rec.actuals = [...rec.actuals, ...new Array(dcount).fill(0)].slice(0, dcount); }
+    }
+    dailyDataMap[key] = rec;
+    localStorage.setItem(LS_DAILY_DATA, JSON.stringify(dailyDataMap));
+    return rec;
+  }
+
+  function renderDailyEditor(){
+    const month = monthSel.value;
+    const year = currentYear;
+    const rec = ensureDailyData(month, year);
+    const mIdx = monthIndex(month);
+    const rows = rec.goals.map((g, i) => {
+      const a = Number(rec.actuals[i]) || 0;
+      const dateLbl = labelMD(mIdx, i+1); // "M/D"
+      return `
+        <tr>
+          <td>${dateLbl}</td>
+          <td><input type="number" min="0" step="1" value="${Number(g)||0}" data-col="goal" data-day="${i}"></td>
+          <td><input type="number" min="0" step="1" value="${a}" data-col="actual" data-day="${i}"></td>
+        </tr>
+      `;
+    }).join('');
+    editorTableBody.innerHTML = rows || `<tr><td colspan="3" style="color:#9aa3ad">No days</td></tr>`;
+    updateEditorSums();
+    importStatus.textContent = '';
+  }
+
+  function updateEditorSums(){
+    const inputs = [...editorTableBody.querySelectorAll('input[type="number"]')];
+    let goalSum = 0, actualSum = 0;
+    inputs.forEach(inp=>{
+      const v = Number(inp.value)||0;
+      if(inp.dataset.col === 'goal') goalSum += v;
+      else if(inp.dataset.col === 'actual') actualSum += v;
+    });
+    sumGoal.textContent = fmtInt(goalSum);
+    sumActual.textContent = fmtInt(actualSum);
+  }
+
+  editorTableBody.addEventListener('input', e=>{
+    if(!e.target.matches('input[type="number"]')) return;
+    updateEditorSums();
+  });
+
+  function saveDailyData(){
+    const month = monthSel.value;
+    const year = currentYear;
+    const dcount = editorTableBody.querySelectorAll('tr').length;
+    const goals = new Array(dcount).fill(0);
+    const actuals = new Array(dcount).fill(0);
+    [...editorTableBody.querySelectorAll('input')].forEach(inp=>{
+      const day = Number(inp.dataset.day)||0;
+      const v = Math.max(0, Number(inp.value)||0);
+      if(inp.dataset.col === 'goal') goals[day] = v;
+      else if(inp.dataset.col === 'actual') actuals[day] = v;
+    });
+    dailyDataMap[monthYearKey(month, year)] = {goals, actuals};
+    localStorage.setItem(LS_DAILY_DATA, JSON.stringify(dailyDataMap));
+  }
+
+  /* ===== CSV Import ===== */
+  importCsvBtn.addEventListener('click', () => csvFileInput.click());
+  csvFileInput.addEventListener('change', handleCsvFile, false);
+
+  function handleCsvFile(e){
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || '');
+      const res = importCsvText(text);
+      importStatus.textContent =
+        `Imported ${res.updated} row${res.updated===1?'':'s'} `
+        + (res.skipped>0 ? `• Skipped ${res.skipped} outside month/invalid` : '')
+        + (res.duplicates>0 ? ` • Overwrote ${res.duplicates} day${res.duplicates===1?'':'s'}` : '')
+        + `. Click Save to persist.`;
+      updateEditorSums();
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  function importCsvText(text){
+    const month = monthSel.value;
+    const yearDefault = currentYear;
+    const monthIdx = monthIndex(month); // 0-based
+    const dim = daysInMonthByName(month, yearDefault);
+
+    const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    let updated = 0, skipped = 0, duplicates = 0;
+
+    const goalInputs = [...editorTableBody.querySelectorAll('input[data-col="goal"]')];
+    const actualInputs = [...editorTableBody.querySelectorAll('input[data-col="actual"]')];
+
+    let startIdx = 0;
+    if(lines.length){
+      const first = lines[0].split(',')[0].trim();
+      if(!/^\d/.test(first)) startIdx = 1; // header
+    }
+
+    for(let i=startIdx; i<lines.length; i++){
+      const raw = lines[i];
+      if(!raw) continue;
+      const parts = raw.split(',').map(s=>s.trim());
+      if(parts.length < 2){ skipped++; continue; }
+
+      const dstr = parts[0];
+      const mdy = dstr.split('/').map(s=>s.trim());
+      if(mdy.length < 2){ skipped++; continue; }
+      let m = Number(mdy[0]) || NaN;
+      let d = Number(mdy[1]) || NaN;
+      let y = mdy.length>=3 ? Number(mdy[2]) : yearDefault;
+      if(!Number.isFinite(m) || !Number.isFinite(d) || !Number.isFinite(y)){ skipped++; continue; }
+      m|=0; d|=0; y|=0;
+
+      if(m-1 !== monthIdx || d < 1 || d > dim){ skipped++; continue; }
+
+      const g = Math.max(0, Math.floor(Number(parts[1])||0));
+      const a = parts.length>=3 ? Math.max(0, Math.floor(Number(parts[2])||0)) : 0;
+
+      const dayIndex = d-1;
+      if(!goalInputs[dayIndex] || !actualInputs[dayIndex]){ skipped++; continue; }
+
+      if((Number(goalInputs[dayIndex].value)||0)!==0 || (Number(actualInputs[dayIndex].value)||0)!==0){
+        duplicates++;
+      }
+
+      goalInputs[dayIndex].value = g;
+      actualInputs[dayIndex].value = a;
+      updated++;
+    }
+    return {updated, skipped, duplicates};
+  }
+
+  /* ===== Quick set today's Actual from Today’s Tours card ===== */
+  submitTodayBtn.addEventListener('click', () => {
+    const val = Math.max(0, Math.floor(Number(todayToursInput.value) || 0));
+    const now = new Date();
+    const thisMonthName = MONTHS[now.getMonth()];
+    const year = now.getFullYear();
+    const dayIdx = now.getDate() - 1;
+
+    const rec = ensureDailyData(thisMonthName, year);
+    const existing = Number(rec.actuals[dayIdx]) || 0;
+
+    if(existing !== 0 && existing !== val){
+      const ok = confirm(`Today already has ${existing}. Replace with ${val}?`);
+      if(!ok) return;
+    }
+
+    rec.actuals[dayIdx] = val;
+    dailyDataMap[monthYearKey(thisMonthName, year)] = rec;
+    localStorage.setItem(LS_DAILY_DATA, JSON.stringify(dailyDataMap));
+
+    if(monthSel.value === thisMonthName && currentYear === year){
+      recalc();
+    }
+
+    pushStatus.textContent = `Saved ${val} to ${thisMonthName} ${now.getDate()} Actual.`;
+    pushStatus.classList.add('success');
+    setTimeout(()=>{ pushStatus.textContent=''; pushStatus.classList.remove('success'); }, 3500);
+    todayToursInput.value = '';
+  });
+
+  /* ===== Menu / actions ===== */
+  function openMenu(){
+    overlay.classList.add('show'); document.body.classList.add('no-scroll');
+    renderDailyEditor();
+  }
+  function closeMenuPanel(){
+    overlay.classList.remove('show'); document.body.classList.remove('no-scroll');
+  }
+  menuBtn.addEventListener('click', openMenu);
+  openDailyBtn.addEventListener('click', openMenu);
+  closeMenu.addEventListener('click', closeMenuPanel);
+  cancelEdit.addEventListener('click', closeMenuPanel);
+  overlay.addEventListener('click', e => { if(e.target === overlay) closeMenuPanel(); });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape' && overlay.classList.contains('show')) closeMenuPanel(); });
+
+  saveAllBtn.addEventListener('click', ()=>{ saveDailyData(); closeMenuPanel(); recalc(); });
+  resetMonthBtn.addEventListener('click', ()=>{
+    if(!confirm('Clear all Goal & Actual values for this month?')) return;
+    const dcount = daysInMonthByName(monthSel.value, currentYear);
+    dailyDataMap[monthYearKey(monthSel.value, currentYear)] = {goals:new Array(dcount).fill(0), actuals:new Array(dcount).fill(0)};
+    localStorage.setItem(LS_DAILY_DATA, JSON.stringify(dailyDataMap));
+    renderDailyEditor(); recalc();
+  });
+
+  clearAllBtn.addEventListener('click', ()=>{
+    editorTableBody.querySelectorAll('input').forEach(inp=> inp.value = 0);
+    updateEditorSums();
+    importStatus.textContent = '';
+  });
+
+  importCsvBtn.addEventListener('click', () => csvFileInput.click());
+  csvFileInput.addEventListener('change', handleCsvFile, false);
+
+  /* ===== Override tiers (Lead) ===== */
+  const LEAD_TIERS = [
+    {min:101, max:102.99, rate:0.50},
+    {min:103, max:106.99, rate:0.75},
+    {min:107, max:110.99, rate:1.00},
+    {min:111, max:114.99, rate:1.25},
+    {min:115, max:Infinity, rate:1.50}
+  ];
+  const rateForPct = (pct, tiers) => {
+    for(const t of tiers){ if(pct >= t.min && pct <= t.max) return t.rate; }
+    return pct >= tiers[tiers.length-1].min ? tiers[tiers.length-1].rate : 0;
+  };
+
+  /* ===== Core Calculations ===== */
+  function recalc(){
+    const asOf = new Date(); // today
+    const theMonth = monthSel.value;
+    const year = currentYear;
+
+    // elapsed includes today; remaining excludes today
+    const [elapsedDays, totalDays] = dayPositionForSelectedMonth(asOf, theMonth, year);
+    const clampedElapsed = Math.max(0, Math.min(elapsedDays, totalDays));
+    const daysRemaining = Math.max(0, totalDays - clampedElapsed);
+
+    const rec = ensureDailyData(theMonth, year);
+
+    // Budget (official) & Team Goal (× 1.075)
+    const budget = rec.goals.reduce((a,b)=>a+(Number(b)||0),0);
+    const teamGoal = budget * 1.075;
+
+    // To-date metrics (include today)
+    const mtdActual = rec.actuals.slice(0, clampedElapsed).reduce((a,b)=>a+(Number(b)||0), 0);
+    const projectedToDate = rec.goals.slice(0, clampedElapsed).reduce((a,b)=>a+(Number(b)||0), 0);
+
+    const remaining = Math.max(0, teamGoal - mtdActual);
+    const dailyAvg = daysRemaining>0 ? (remaining / daysRemaining) : remaining;
+
+    // % of Budget (full-month basis)
+    const pctBudget = budget>0 ? (mtdActual / budget)*100 : 0;
+
+    // % of Standard to date
+    const pctStandard = projectedToDate>0 ? (mtdActual / projectedToDate)*100 : 0;
+
+    /* === Snapshot KPIs === */
+    runStdPctEl.textContent = `${clamp(pctStandard,0,9999).toFixed(2)}%`;
+    const variance = mtdActual - projectedToDate;
+    runVariance.textContent = (variance>0?'+':'') + fmtInt(variance);
+    runVariance.classList.toggle('good', variance >= 0);
+    runVariance.classList.toggle('bad', variance < 0);
+    runMTDActual.textContent = fmtInt(mtdActual);
+    runProjected.textContent = fmtInt(projectedToDate);
+
+    /* === Summary KPIs === */
+    // Clean subtitle: only "X days remaining"
+    const dr = Math.max(0, totalDays - clampedElapsed);
+    daysSubtitle.textContent = `${dr} day${dr===1?'':'s'} remaining`;
+
+    budgetTours.textContent = fmtInt(budget);
+    teamGoalTours.textContent = fmtInt(teamGoal);
+    remainingTours.textContent = fmtInt(remaining);
+    toursPerDay.textContent = isFinite(dailyAvg) ? (dailyAvg<1 ? dailyAvg.toFixed(2) : fmtInt(dailyAvg)) : '—';
+
+    // % of Budget KPI + progress border fill
+    const pctBudgetClamped = clamp(pctBudget,0,9999);
+    officialPctValue.textContent = `${pctBudgetClamped.toFixed(1)}%`;
+    officialPctBox.style.setProperty('--pct', Math.min(pctBudgetClamped,100).toFixed(1));
+
+    // % of Standard KPI
+    stdBoxValue.textContent = `${clamp(pctStandard,0,9999).toFixed(1)}%`;
+
+    /* === Overrides — rounded to nearest dollar, show no decimals === */
+    const leadRate = rateForPct(pctStandard, LEAD_TIERS); // tiered
+    const managerRate = MANAGER_RATE;                      // flat $4.50/tour
+    leadOverrideValue.textContent = currencyWhole(Math.round(mtdActual * leadRate));
+    mgrOverrideValue.textContent  = currencyWhole(Math.round(mtdActual * managerRate));
+  }
+
+  /* ===== Events ===== */
+  monthSel.addEventListener('change', () => {
+    localStorage.setItem(LS_SELECTED_MONTH, monthSel.value);
+    recalc();
+  });
+
+  // Menu toggles
+  function openMenu(){
+    overlay.classList.add('show'); document.body.classList.add('no-scroll');
+    renderDailyEditor();
+  }
+  function closeMenuPanel(){
+    overlay.classList.remove('show'); document.body.classList.remove('no-scroll');
+  }
+  document.getElementById('menuBtn').addEventListener('click', openMenu);
+  openDailyBtn.addEventListener('click', openMenu);
+  document.getElementById('closeMenu').addEventListener('click', closeMenuPanel);
+  document.getElementById('cancelEdit').addEventListener('click', closeMenuPanel);
+  document.getElementById('menuOverlay').addEventListener('click', e => { if(e.target.id === 'menuOverlay') closeMenuPanel(); });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape' && document.getElementById('menuOverlay').classList.contains('show')) closeMenuPanel(); });
+
+  document.getElementById('saveAll').addEventListener('click', ()=>{ saveDailyData(); closeMenuPanel(); recalc(); });
+  document.getElementById('resetMonth').addEventListener('click', ()=>{
+    if(!confirm('Clear all Goal & Actual values for this month?')) return;
+    const dcount = daysInMonthByName(monthSel.value, currentYear);
+    dailyDataMap[monthYearKey(monthSel.value, currentYear)] = {goals:new Array(dcount).fill(0), actuals:new Array(dcount).fill(0)};
+    localStorage.setItem(LS_DAILY_DATA, JSON.stringify(dailyDataMap));
+    renderDailyEditor(); recalc();
+  });
+  document.getElementById('clearAll').addEventListener('click', ()=>{
+    editorTableBody.querySelectorAll('input').forEach(inp=> inp.value = 0);
+    updateEditorSums();
+    importStatus.textContent = '';
+  });
+  document.getElementById('importCsv').addEventListener('click', () => document.getElementById('csvFile').click());
+  document.getElementById('csvFile').addEventListener('change', handleCsvFile, false);
+
+  /* ===== Init ===== */
+  const savedMonth = localStorage.getItem(LS_SELECTED_MONTH);
+  monthSel.value = savedMonth && [...monthSel.options].some(o => o.value===savedMonth)
+    ? savedMonth
+    : MONTHS[new Date().getMonth()];
+
+  recalc(); // initial compute
+})();
+</script>
+</body>
+</html>

@@ -3,124 +3,109 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Pay Calculator — Select Site</title>
+<title>Choose Your Calculator</title>
 <style>
   :root{
     --green:#1B5E20; --green-600:#124318; --orange:#FF7A00;
     --paper:#FFFFFF; --ink:#1f2937; --muted:#6b7280;
     --border:#e5e7eb; --shadow:0 8px 28px rgba(0,0,0,.08), 0 2px 8px rgba(0,0,0,.05);
-    --tint: color-mix(in srgb, var(--green) 7%, #fff);
-    --radius:14px;
   }
   *{box-sizing:border-box}
-  html,body{margin:0; width:100%; min-height:100%; background:#f8fafc; color:var(--ink); font-family:ui-sans-serif,system-ui;}
-  body{display:flex; flex-direction:column}
-  .container{max-width:1100px; width:100%; margin:0 auto; padding:0 16px}
+  html,body{
+    margin:0; width:100%; min-width:100%;
+    color:var(--ink); font-family:ui-sans-serif,system-ui;
+    background:#f8fafc; display:flex; flex-direction:column; min-height:100vh;
+  }
+  body.no-scroll{ overflow:hidden; }
 
   /* Header */
-  .app-header{position:sticky; top:0; z-index:10; background:linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.85)); border-bottom:1px solid var(--border)}
-  .header-row{display:flex; align-items:center; justify-content:flex-start; height: clamp(52px, 7vw, 96px);}
-  .logo-img{display:block; height: calc(100% - 10px); width:auto; object-fit:contain; max-width:100%}
-
-  /* Card shell */
-  main{flex:1; display:grid; place-items:start; padding:24px 0}
-  .card{width:100%; background:var(--paper); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow)}
-  .card-header{padding:20px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, var(--tint), #fff 80%); border-left:4px solid var(--orange); border-top-left-radius:var(--radius)}
-  .card-header h1{margin:0; font-size:22px; color:var(--green-600)}
-  .card-body{padding:20px}
-
-  /* Grid selector — squares; 2/3/4 columns */
-  .grid{display:grid; gap:14px; grid-template-columns:repeat(2,minmax(0,1fr));}
-  @media(min-width:840px){.grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
-  @media(min-width:1100px){.grid{grid-template-columns:repeat(4,minmax(0,1fr));}}
-
-  .site-card{
-    position:relative; display:block; width:100%;
-    aspect-ratio:1/1;
-    border:1px solid var(--border); border-radius:14px;
-    overflow:hidden; cursor:pointer; background:#eef3ee;
-    transition:box-shadow .18s ease, border-color .18s ease, transform .02s ease-in;
-    outline:none;
+  .app-header{
+    position: sticky; top:0; z-index:20;
+    background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.85));
+    border-bottom: 1px solid var(--border);
   }
-  .site-card::before{content:""; float:left; padding-top:100%}
-  .site-card::after{content:""; display:block; clear:both}
-
-  .site-thumb{
-    position:absolute; inset:0; width:100%; height:100%;
-    object-fit:cover; object-position:center;
-    filter:saturate(1.05);
-    transition:transform .25s ease, filter .2s ease, opacity .2s ease;
+  .container{max-width:1100px; width:100%; margin:0 auto; padding:0 16px;}
+  .header-row{
+    display:flex;align-items:center;justify-content:flex-start;gap:12px;
+    height: clamp(52px, 7vw, 96px);
   }
-  .site-card:hover .site-thumb{transform:scale(1.02)}
-
-  /* Overlay container — align to bottom */
-  .overlay{
-    position:absolute; inset:0;
-    display:flex; align-items:flex-end; justify-content:center;
-    padding:12px; pointer-events:none; background:none;
-  }
-  .site-card[aria-checked="true"] .overlay{
-    background:linear-gradient(to top, rgba(0,0,0,.35), rgba(0,0,0,0) 60%);
+  .logo-img{
+    display:block; height: calc(100% - 10px); width:auto; object-fit:contain; max-width:100%;
   }
 
-  /* Label bubble */
-  .label{
-    background:rgba(255,255,255,.78);
-    color:#0f172a; font-weight:800; text-align:center;
-    border-radius:12px; padding:6px 12px;
-    inline-size:max-content;
-    max-inline-size: min(95%, 22ch);
-    margin-inline:auto;
-    line-height:1.2; word-break:break-word;
-    box-shadow:0 2px 8px rgba(0,0,0,.15);
+  /* Layout / Card */
+  main.container{padding-top:16px;}
+  .grid{display:grid;gap:18px;grid-template-columns:1fr}
+  .card{
+    background:var(--paper); border:1px solid var(--border);
+    border-radius:14px; box-shadow:var(--shadow)
+  }
+  .card .card-header{
+    padding:16px 20px 10px; border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg, color-mix(in srgb, var(--green) 7%, #fff), #fff 80%);
+    border-left:4px solid var(--orange); border-top-left-radius:14px;
+    display:flex; align-items:flex-end; justify-content:space-between
+  }
+  .card .card-header h2{margin:0;font-size:18px;color:var(--green-600)}
+  .card .card-body{padding:18px 20px}
+
+  /* Controls */
+  .field{display:grid;gap:8px;margin-bottom:14px}
+  .label{font-weight:800;color:var(--green-600);font-size:16px;margin:2px 0 2px}
+  .input{
+    display:flex;align-items:center;background:#fff;border:1px solid var(--border);
+    border-radius:12px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.04)
+  }
+  select{width:100%;border:0;outline:0;font-size:16px;background:transparent;color:var(--ink)}
+
+  /* Description box */
+  .desc{
+    margin-top:6px; padding:12px 14px;
+    background:#fff; border:1px solid var(--border); border-radius:12px;
+    color:var(--muted); line-height:1.45;
   }
 
-  /* Check icon */
-  .check{
-    position:absolute; top:8px; left:8px; width:28px; height:28px;
-    border-radius:999px; background:#fff; border:1px solid rgba(0,0,0,.06);
-    display:grid; place-items:center; box-shadow:0 2px 6px rgba(0,0,0,.15);
-    opacity:0; transform:scale(.9); transition:opacity .18s ease, transform .18s ease;
+  /* Button */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;
+    border-radius:999px;padding:10px 18px;margin-top:16px;
+    font-weight:700;border:1px solid var(--border);
+    background:#fff;color:var(--green);cursor:pointer;
+    transition: all 0.15s ease;
   }
-  .check svg{width:18px; height:18px; display:block; stroke:var(--green); stroke-width:3; fill:none}
-
-  .site-card[aria-checked="true"]{
-    border-color: color-mix(in srgb, var(--green) 40%, var(--border));
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 18%, transparent);
-    background:#fafdfb;
-  }
-  .site-card[aria-checked="true"] .check{opacity:1; transform:scale(1)}
-
-  /* Greyscale all non-selected once there's a selection */
-  .has-selection .site-card[aria-checked="false"] .site-thumb{
-    filter:grayscale(1) contrast(0.95) brightness(0.95);
-    opacity:.85;
+  .btn:hover{
+    border-color:#d1d5db;
+    box-shadow:0 6px 16px rgba(0,0,0,.08);
+    transform:translateY(-1px);
   }
 
-  /* Screen-reader only text */
-  .sr {
-    position:absolute;
-    width:1px;
-    height:1px;
-    padding:0;
-    margin:-1px;
-    overflow:hidden;
-    clip:rect(0,0,0,0);
-    white-space:nowrap;
-    border:0;
-  }
+  footer{margin-top:auto;padding:12px 0;text-align:center;font-size:13px;color:#bbb;}
 
-  /* Buttons */
-  .row{display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-top:24px}
-  .btn{flex:1 1 auto; max-width:200px; display:inline-flex; align-items:center; justify-content:center;
-    gap:8px; border-radius:999px; padding:10px 16px; font-weight:800;
-    border:1px solid var(--border); background:#fff; color:var(--green);
-    cursor:pointer; text-align:center;
+  /* Password Modal */
+  .modal-backdrop{
+    position:fixed; inset:0; display:none;
+    background:rgba(15,23,42,.45);
+    align-items:center; justify-content:center;
+    padding:16px; z-index:60;
   }
-  .btn.primary{background:var(--green); border-color:var(--green); color:#fff}
-  .btn:disabled{opacity:.5; cursor:not-allowed}
-
-  footer{padding:12px 0; text-align:center; font-size:13px; color:#bbb}
+  .modal{
+    width:min(420px,92vw);
+    background:#fff; border-radius:16px; border:1px solid var(--border);
+    box-shadow:0 24px 64px rgba(0,0,0,.25);
+    padding:20px;
+  }
+  .modal h4{ margin:0 0 .25rem; font-size:20px; color:var(--green-600) }
+  .modal p{ margin:0 0 1rem; color:var(--muted); font-size:14px }
+  .row{ display:flex; gap:10px; align-items:center }
+  .input-inline{
+    flex:1; display:flex; align-items:center; gap:.5rem;
+    border:1px solid var(--border); border-radius:10px; padding:.7rem .8rem; background:#fff;
+  }
+  .input-inline input{ border:0; outline:0; width:100%; font-size:15px; }
+  .btn.secondary{
+    background:#eef2f7; color:#111; border:1px solid var(--border);
+  }
+  .err{ margin-top:.6rem; color:#b71c1c; font-size:13px; display:none; }
 </style>
 </head>
 <body>
@@ -131,112 +116,135 @@
   </div>
 </header>
 
-<main>
-  <div class="container">
-    <section class="card" aria-labelledby="title">
-      <div class="card-header">
-        <h1 id="title">Select Your Site</h1>
-      </div>
-      <div class="card-body">
-        <div role="radiogroup" aria-label="Site selection" class="grid" id="siteGrid"></div>
+<main class="container">
+  <div class="grid">
 
-        <div class="row">
-          <button id="clearBtn" class="btn" type="button">Clear Selection</button>
-          <button id="continueBtn" class="btn primary" type="button" disabled>Continue</button>
+    <!-- CHOOSE YOUR CALCULATOR -->
+    <section class="card">
+      <div class="card-header"><h2>Choose Your Calculator</h2></div>
+      <div class="card-body">
+        <div class="field">
+          <div class="label">Select a tool</div>
+          <div class="input">
+            <select id="calcSelect" aria-label="Choose calculator">
+              <option value="pay" selected>Pay Calculator</option>
+              <option value="site">Site Calculator</option>
+            </select>
+          </div>
         </div>
+
+        <div id="calcDescription" class="desc">
+          View your potential weekly pay breakdown and see how Master’s Trip points are calculated.
+        </div>
+
+        <button id="submitBtn" class="btn" type="button">Submit</button>
       </div>
     </section>
+
   </div>
 </main>
 
 <footer>Created by Aaron Feight 2025</footer>
 
+<!-- Password Modal -->
+<div class="modal-backdrop" id="pwBackdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pwTitle" aria-describedby="pwDesc">
+    <h4 id="pwTitle">Enter Password</h4>
+    <p id="pwDesc">The Site Calculator requires a password to continue.</p>
+    <div class="row" style="margin-bottom:.75rem">
+      <div class="input-inline">
+        <input id="pwInput" type="password" placeholder="Password" autocomplete="current-password" />
+        <button class="btn secondary" id="togglePw" type="button" aria-label="Show or hide password">Show</button>
+      </div>
+      <button class="btn" id="pwSubmit" type="button">Continue</button>
+    </div>
+    <div class="err" id="pwErr">Incorrect password. Try again.</div>
+    <div class="row" style="justify-content:flex-end; margin-top:.5rem">
+      <button class="btn secondary" id="pwCancel" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (() => {
-  const LS_KEY = 'siteSelection';
+  const selectEl = document.getElementById('calcSelect');
+  const descEl = document.getElementById('calcDescription');
+  const submitBtn = document.getElementById('submitBtn');
 
-  // Route builder: South Beach -> HICV-MB-Pay-Calc.html, others -> HICV-General-Pay-Calc.html
-  function pageForSite(id){
-    return (id === 'south-beach') ? 'HICV-MB-Pay-Calc.html' : 'HICV-General-Pay-Calc.html';
+  const DESCRIPTIONS = {
+    pay: "View your potential weekly pay breakdown and see how Master’s Trip points are calculated.",
+    site: "Track pacing against budget and team goals with clear running totals and on-the-fly projections."
+  };
+
+  const LINKS = {
+    pay: "./site-selection.html",
+    site: "./manager-calculator.html"
+  };
+
+  const REQUIRED_PASSWORD = "bookem";
+
+  // Password modal elements
+  const backdrop = document.getElementById('pwBackdrop');
+  const pwInput  = document.getElementById('pwInput');
+  const pwSubmit = document.getElementById('pwSubmit');
+  const pwCancel = document.getElementById('pwCancel');
+  const pwErr    = document.getElementById('pwErr');
+  const togglePw = document.getElementById('togglePw');
+
+  function updateDescription(){
+    const val = selectEl.value;
+    descEl.textContent = DESCRIPTIONS[val] || "";
   }
 
-  const SITES = [
-    { id: 'cape-canaveral',  name: 'Cape Canaveral',   img: 'https://images.contentstack.io/v3/assets/bltba617d00249585dc/bltd5e047ac82ec503c/61a794c237c855238d66ec0c/cape-canaveral-resort-property-building-sunset-1440x1080.jpg?format=pjpg&auto=webp&disable=upscale&quality=70&width=1024&height=716&fit=crop' },
-    { id: 'david-walleys',   name: 'David Walleys',    img: 'https://images.contentstack.io/v3/assets/bltba617d00249585dc/blt08b954f4f80c7ee7/5e290fd1bad1555533de72e0/DWR_Amenities_HotSprings_Pool_001.jpg?format=pjpg&auto=webp&disable=upscale&quality=70&width=1024&height=716&fit=crop' },
-    { id: 'desert-club',     name: 'Desert Club',      img: 'https://images.contentstack.io/v3/assets/bltba617d00249585dc/bltba57961e1c76781e/5e54342d03d2600dc053dc8f/DCR_amenities_WateringHole_020.jpg?format=pjpg&auto=webp&disable=upscale&quality=70&width=1024&height=716&fit=crop' },
-    { id: 'holiday-hills',   name: 'Holiday Hills',    img: 'https://images.contentstack.io/v3/assets/bltba617d00249585dc/bltc9cc49c72b923b72/5e2f21fc8f7e217daef663fa/HHR_property_Resort_001.jpg?format=pjpg&auto=webp&disable=upscale&quality=70&width=1024&height=716&fit=crop' },
-    { id: 'new-orleans',     name: 'New Orleans',      img: 'https://images.contentstack.io/v3/assets/bltba617d00249585dc/blt0bde089d15479ba0/5fdba695b47cdf7fc7d68d16/20201202_NOR_0184AB_(1)-card.jpg?format=pjpg&auto=webp&disable=upscale&quality=70&width=1024&height=716&fit=crop' },
-    { id: 'orange-lake',     name: 'Orange Lake Resort', img: 'https://images.contentstack.io/v3/assets/bltba617d00249585dc/bltf04192786a7478ff/66c8bea691a856f9a470348a/orange-lake-resort-river-island-exchange-exterior-1440x1080.jpg?format=pjpg&auto=webp&disable=upscale&quality=70&width=1024&height=716&fit=crop' },
-    { id: 'scottsdale',      name: 'Scottsdale',       img: 'https://images.contentstack.io/v3/assets/bltba617d00249585dc/blte2ff00e280785c31/5e2f6a8f507d2f74fb78c1cf/SDR_Amenities_Pool_025.JPG?format=pjpg&auto=webp&disable=upscale&quality=70&width=1024&height=716&fit=crop' },
-    { id: 'seaside',         name: 'Seaside',          img: 'https://images.contentstack.io/v3/assets/bltba617d00249585dc/bltc0d2242526c7465e/605cb0545d7a7e0ef01ab30f/SSR_Building-4320x2048.jpeg?format=pjpg&auto=webp&disable=upscale&quality=70&width=1024&height=716&fit=crop' },
-    { id: 'smoky-mountain',  name: 'Smoky Mountain',   img: 'https://images.contentstack.io/v3/assets/bltba617d00249585dc/blt25ba35c9bfe5e356/5e6115b88abca6651fc8c4b0/SMR_amenities_pool_010.jpg?format=pjpg&auto=webp&disable=upscale&quality=70&width=1024&height=716&fit=crop' },
-    { id: 'south-beach',     name: 'South Beach Resort', img: 'https://images.contentstack.io/v3/assets/bltba617d00249585dc/blt3feb49ba4da8f26d/5e4590eb5e52d50d64528109/SBR_property_CheckIn_003.jpg?format=pjpg&auto=webp&disable=upscale&quality=70&width=1024&height=716&fit=crop' },
-    { id: 'williamsburg',    name: 'Williamsburg',     img: 'https://images.contentstack.io/v3/assets/bltba617d00249585dc/blt0dd0b98197e30327/5daf1a6adf78486c826dc4b9/holiday-inn-club-vacations-williamsburg-5745140523-16x5.jpeg?format=pjpg&auto=webp&disable=upscale&quality=70&width=1024&height=716&fit=crop' }
-  ];
-
-  const siteGrid    = document.getElementById('siteGrid');
-  const continueBtn = document.getElementById('continueBtn');
-  const clearBtn    = document.getElementById('clearBtn');
-
-  let selectedId = null;
-
-  function renderGrid(){
-    siteGrid.innerHTML = SITES.map((s, idx)=>`
-      <button class="site-card" role="radio" aria-checked="false" tabindex="${idx===0? '0':'-1'}" data-id="${s.id}" data-name="${s.name}">
-        <img class="site-thumb" src="${s.img}" alt="${s.name}" loading="lazy" onerror="this.style.display='none'">
-        <div class="check" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg>
-        </div>
-        <div class="overlay"><div class="label">${s.name}</div></div>
-        <span class="sr">Site: ${s.name}</span>
-      </button>
-    `).join('');
+  function openModal(){
+    backdrop.style.display = 'flex';
+    backdrop.setAttribute('aria-hidden','false');
+    document.body.classList.add('no-scroll');
+    pwErr.style.display = 'none';
+    pwInput.value = '';
+    setTimeout(()=> pwInput.focus(), 50);
+  }
+  function closeModal(){
+    backdrop.style.display = 'none';
+    backdrop.setAttribute('aria-hidden','true');
+    document.body.classList.remove('no-scroll');
+  }
+  function trySubmitPassword(){
+    const val = (pwInput.value || '').trim();
+    if(val === REQUIRED_PASSWORD){
+      window.location.href = LINKS.site;
+    } else {
+      pwErr.style.display = 'block';
+      pwInput.focus(); pwInput.select();
+    }
   }
 
-  function updateSelection(id, focusEl=true){
-    const cards = [...siteGrid.querySelectorAll('.site-card')];
-    const root  = siteGrid;
-    cards.forEach(c=>{
-      const on = c.dataset.id === id;
-      c.setAttribute('aria-checked', on ? 'true' : 'false');
-      c.tabIndex = on ? 0 : -1;
-      if(on && focusEl) c.focus();
-    });
-    selectedId = id || null;
-    continueBtn.disabled = !selectedId;
-    if(selectedId){ root.classList.add('has-selection'); }
-    else          { root.classList.remove('has-selection'); }
+  function handleSubmit(){
+    const val = selectEl.value;
+    if(val === 'pay'){
+      window.location.href = LINKS.pay;
+    }else if(val === 'site'){
+      openModal();
+    }
   }
 
-  renderGrid();
+  // Events
+  selectEl.addEventListener('change', updateDescription);
+  submitBtn.addEventListener('click', handleSubmit);
 
-  // Prefill saved selection
-  const savedId = localStorage.getItem(LS_KEY);
-  if(savedId && SITES.some(s=>s.id===savedId)){ updateSelection(savedId, false); }
+  pwCancel.addEventListener('click', closeModal);
+  pwSubmit.addEventListener('click', trySubmitPassword);
+  pwInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') trySubmitPassword(); });
 
-  siteGrid.addEventListener('click', (e)=>{
-    const card = e.target.closest('.site-card');
-    if(!card) return;
-    updateSelection(card.dataset.id);
+  togglePw.addEventListener('click', ()=>{
+    const showing = pwInput.type === 'text';
+    pwInput.type = showing ? 'password' : 'text';
+    togglePw.textContent = showing ? 'Show' : 'Hide';
+    pwInput.focus();
   });
 
-  continueBtn.addEventListener('click', ()=>{
-    if(!selectedId) return;
-    localStorage.setItem(LS_KEY, selectedId);
-    window.location.href = pageForSite(selectedId);
-  });
-
-  clearBtn.addEventListener('click', ()=>{
-    localStorage.removeItem(LS_KEY);
-    selectedId = null;
-    continueBtn.disabled = true;
-    siteGrid.classList.remove('has-selection');
-    [...siteGrid.querySelectorAll('.site-card')].forEach((c,i)=>{
-      c.setAttribute('aria-checked','false');
-      c.tabIndex = i===0 ? 0 : -1;
-    });
-    siteGrid.querySelector('.site-card')?.focus();
-  });
+  // Init
+  updateDescription();
 })();
 </script>
 
