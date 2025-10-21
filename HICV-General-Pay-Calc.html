@@ -52,7 +52,7 @@
   .scale-wrap{border:1px solid var(--border);border-radius:12px; width:100%}
   table{width:100%;border-collapse:collapse}
   th,td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left}
-  thead th{background:#f3f7f4;color:var(--green-600);font-size:12px;text-transform:uppercase}
+  thead th{background:#f3f7f4;color:#green-600;font-size:12px;text-transform:uppercase}
   .scale tbody tr.active{background:rgba(27,94,32,.10)}
 
   /* Summary */
@@ -191,7 +191,7 @@
             <thead><tr><th>Tours</th><th>Rate</th></tr></thead>
             <tbody></tbody>
           </table>
-          <p style="margin:8px 0 0;font-size:12px;color:#6b7280;">Note: A hidden “&lt; first threshold = $0” tier is always enforced.</p>
+          <!-- note removed -->
         </div>
       </div>
 
@@ -227,7 +227,6 @@
   /* ===== Constants ===== */
   const HOURLY_TOTAL = 37.5 * 15; // included in Grand Total
   const DEFAULT_POINTS = { owners:1250, goos:1570, renters:1570 };
-  // Visible thresholds only; hidden zero tier enforced separately
   const DEFAULT_VISIBLE = [
     {min:7, rate:35}, {min:10, rate:55}, {min:12, rate:75},
     {min:14, rate:80}, {min:17, rate:85}, {min:19, rate:90},
@@ -280,11 +279,11 @@
   const tripLogTbody = document.querySelector('#tripLogTable tbody');
 
   /* ===== Storage Keys ===== */
-  const LS_SCALES = 'scales';            // per-month arrays (first row always {min:0,rate:0})
+  const LS_SCALES = 'scales';
   const LS_POINTS = 'pointSettings';
   const LS_TRIP = 'tripPointsTotal';
   const LS_TRIP_TS = 'tripPointsLastTs';
-  const LS_TRIP_LOG = 'tripPointsLog';   // [{ts, points}]
+  const LS_TRIP_LOG = 'tripPointsLog';
   const LS_SELECTED_MONTH = 'selectedMonth';
   const LS_SCALE_VISIBLE = 'scaleVisible';
 
@@ -293,7 +292,7 @@
   let pointSettings = JSON.parse(localStorage.getItem(LS_POINTS) || 'null') || { ...DEFAULT_POINTS };
   let tripPoints = parseInt(localStorage.getItem(LS_TRIP) || '0', 10) || 0;
   let tripTs = localStorage.getItem(LS_TRIP_TS) || '';
-  let tripLog = JSON.parse(localStorage.getItem(LS_TRIP_LOG) || '[]'); // [{ts, points}]
+  let tripLog = JSON.parse(localStorage.getItem(LS_TRIP_LOG) || '[]');
 
   /* ===== Helpers ===== */
   const currency = v => (+v || 0).toLocaleString(undefined,{style:'currency',currency:'USD'});
@@ -352,11 +351,9 @@
     const rate = rateForTotal(total);
     selectedRateEl.textContent = currency(rate);
 
-    // Tours Pay:
     const toursPay = rate * total;
     toursPayEl.textContent = currency(toursPay);
 
-    // Points:
     const oPts = o * pointSettings.owners;
     const gPts = g * pointSettings.goos;
     const rPts = r * pointSettings.renters;
@@ -365,11 +362,10 @@
     rentersPtsEl.textContent = intfmt(rPts);
     pointsTotalEl.textContent = intfmt(oPts + gPts + rPts);
 
-    // Grand total (Hourly base + Tours Pay): renter bonus removed
     grandTotalEl.textContent = currency(toursPay + HOURLY_TOTAL);
 
     highlightRow(total);
-    addTripBtn.disabled = false; // enable after any change
+    addTripBtn.disabled = false;
   }
 
   /* ===== Trip Points & Log ===== */
@@ -461,7 +457,6 @@
     document.body.classList.add('no-scroll');
     activateTab('sectionScale');
     loadEditor();
-    // load points + trip widgets
     ptsOwners.value = pointSettings.owners;
     ptsGOO.value = pointSettings.goos;
     ptsRenters.value = pointSettings.renters;
@@ -491,7 +486,7 @@
 
   /* ===== Menu: Scale Editor ===== */
   function loadEditor(){
-    const rows = getVisibleAsc(monthSel.value); // exclude hidden zero tier
+    const rows = getVisibleAsc(monthSel.value);
     editorTableBody.innerHTML = rows.map(r => `
       <tr>
         <td><input type="number" min="1" step="1" value="${r.min}"></td>
@@ -511,7 +506,7 @@
 
   saveAllBtn.addEventListener('click', () => {
     const vis = readEditorRows();
-    scales[monthSel.value] = [{min:0, rate:0}, ...vis]; // enforce hidden zero tier
+    scales[monthSel.value] = [{min:0, rate:0}, ...vis];
     localStorage.setItem(LS_SCALES, JSON.stringify(scales));
 
     pointSettings = {
@@ -537,7 +532,6 @@
 
   /* ===== Back to site selection ===== */
   document.getElementById('backToSites').addEventListener('click', () => {
-    // Navigate to the local site selection page
     window.location.href = 'site-selection.html';
   });
 
