@@ -19,15 +19,17 @@
   .app-header{position: sticky; top:0; z-index:20; background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.85)); border-bottom: 1px solid var(--border);}
   .container{max-width:1100px; width:100%; margin:0 auto; padding:0 16px;}
   .header-row{display:flex;align-items:center;justify-content:space-between;gap:12px; height: clamp(52px, 7vw, 96px);}
-  .logo-img{display:block; height: calc(100% - 10px); width:auto; object-fit:contain; max-width:100%}
+  .logo-link{display:flex; align-items:center; height:100%;}
+  .logo-img{display:block; height: calc(100% - 10px); width:auto; object-fit:contain; max-width:100%; transition: transform .18s ease, filter .18s ease;}
+  .logo-link:hover .logo-img{transform: translateY(-1px) scale(1.02); filter: saturate(1.1);}
   .icon-btn{appearance:none;border:0;background:transparent;padding:6px;margin:0;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;cursor:pointer}
   .icon-btn:hover{background:rgba(27,94,32,.08)} .icon-btn:active{background:rgba(27,94,32,.12)}
   .icon{width:24px;height:24px;stroke:var(--green-600);stroke-width:2;fill:none}
 
-  /* Buttons */
+  /* Back button */
   .btn{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:8px 14px;font-weight:700;border:1px solid var(--border);background:#fff;color:var(--green);cursor:pointer}
   .btn:disabled{opacity:.5;cursor:not-allowed}
-  .back-btn{margin-left:auto;margin-right:12px;white-space:nowrap}
+  .back-btn{margin-left:auto; margin-right:12px; white-space:nowrap}
 
   /* Cards / layout */
   .grid{display:grid;gap:18px;grid-template-columns:1fr; width:100%}
@@ -94,7 +96,9 @@
 
 <header class="app-header">
   <div class="container header-row">
-    <img src="https://logowik.com/content/uploads/images/holiday-inn-club-vacations8035.jpg" alt="Holiday Inn Club Vacations Logo" class="logo-img">
+    <a href="index.html" class="logo-link" title="Go to Home">
+      <img src="images/HI-Emblem-green.png" alt="Holiday Inn Club Vacations Logo" class="logo-img">
+    </a>
     <button class="btn back-btn" id="backToSites" type="button" title="Back to Site Selection">← Site Selection</button>
     <button class="icon-btn" id="menuBtn" aria-label="Open menu"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
   </div>
@@ -147,7 +151,7 @@
           <div class="result-row"><div class="label">Total Tours</div><div class="value" id="totalTours">0</div></div>
           <div class="result-row"><div class="label">Rate</div><div class="value" id="selectedRate">$0.00</div></div>
           <div class="result-row"><div class="label">Tours Pay</div><div class="value" id="toursPay">$0.00</div></div>
-          <div class="result-row"><div class="label">Renter Bonus</div><div class="value" id="renterBonus">$0.00</div></div>
+          <!-- Renter Bonus row intentionally removed -->
           <div class="result-row"><div class="label"><strong>Monthly Points Total</strong></div><div class="value" id="pointsTotal">0</div></div>
           <div class="result-row" style="font-size:12.5px;color:#9aa3ad;">
             <div class="label">Points — Owners: <span id="ownersPts">0</span> • GOOs: <span id="goosPts">0</span> • Renters: <span id="rentersPts">0</span></div>
@@ -222,7 +226,6 @@
 (() => {
   /* ===== Constants ===== */
   const HOURLY_TOTAL = 37.5 * 15; // included in Grand Total
-  const RENTER_BONUS_PER_TOUR = 40; // $40 per renter tour
   const DEFAULT_POINTS = { owners:1250, goos:1570, renters:1570 };
   // Visible thresholds only; hidden zero tier enforced separately
   const DEFAULT_VISIBLE = [
@@ -239,7 +242,6 @@
   const totalToursEl = document.getElementById('totalTours');
   const selectedRateEl = document.getElementById('selectedRate');
   const toursPayEl = document.getElementById('toursPay');
-  const renterBonusEl = document.getElementById('renterBonus');
   const grandTotalEl = document.getElementById('grandTotal');
 
   const ownersPtsEl = document.getElementById('ownersPts');
@@ -350,13 +352,9 @@
     const rate = rateForTotal(total);
     selectedRateEl.textContent = currency(rate);
 
-    // Tours Pay excludes renter bonus:
+    // Tours Pay:
     const toursPay = rate * total;
     toursPayEl.textContent = currency(toursPay);
-
-    // Renter bonus line item:
-    const renterBonus = RENTER_BONUS_PER_TOUR * r;
-    renterBonusEl.textContent = currency(renterBonus);
 
     // Points:
     const oPts = o * pointSettings.owners;
@@ -367,8 +365,8 @@
     rentersPtsEl.textContent = intfmt(rPts);
     pointsTotalEl.textContent = intfmt(oPts + gPts + rPts);
 
-    // Grand total (Hourly base + Tours Pay + Renter Bonus):
-    grandTotalEl.textContent = currency(toursPay + renterBonus + HOURLY_TOTAL);
+    // Grand total (Hourly base + Tours Pay): renter bonus removed
+    grandTotalEl.textContent = currency(toursPay + HOURLY_TOTAL);
 
     highlightRow(total);
     addTripBtn.disabled = false; // enable after any change
@@ -474,7 +472,7 @@
     overlay.classList.remove('show');
     document.body.classList.remove('no-scroll');
   }
-  menuBtn.addEventListener('click', openMenu);
+  document.getElementById('menuBtn').addEventListener('click', openMenu);
   closeMenu.addEventListener('click', closeMenuPanel);
   cancelEdit.addEventListener('click', closeMenuPanel);
   overlay.addEventListener('click', e => { if(e.target === overlay) closeMenuPanel(); });
@@ -519,7 +517,7 @@
     pointSettings = {
       owners: Math.max(0, parseInt(ptsOwners.value || DEFAULT_POINTS.owners, 10) || DEFAULT_POINTS.owners),
       goos:   Math.max(0, parseInt(ptsGOO.value   || DEFAULT_POINTS.goos,   10) || DEFAULT_POINTS.goos),
-      renters:Math.max(0, parseInt(ptsRenters.value|| DEFAULT_POINTS.renters,10) || DEFAULT_POINTS.renters)
+      renters: Math.max(0, parseInt(ptsRenters.value|| DEFAULT_POINTS.renters,10) || DEFAULT_POINTS.renters)
     };
     localStorage.setItem(LS_POINTS, JSON.stringify(pointSettings));
 
@@ -539,7 +537,8 @@
 
   /* ===== Back to site selection ===== */
   document.getElementById('backToSites').addEventListener('click', () => {
-    window.location.href = 'index.html';
+    // Navigate to the local site selection page
+    window.location.href = 'site-selection.html';
   });
 
   /* ===== Init ===== */
