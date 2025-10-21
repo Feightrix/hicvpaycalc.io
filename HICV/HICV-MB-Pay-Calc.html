@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pay Calculator</title>
+<style>
+  :root{
+    --green:#1B5E20; --green-600:#124318; --orange:#FF7A00;
+    --paper:#FFFFFF; --ink:#1f2937; --muted:#6b7280;
+    --border:#e5e7eb; --shadow:0 8px 28px rgba(0,0,0,.08), 0 2px 8px rgba(0,0,0,.05);
+    --radius:14px; --gap:18px; --tint: color-mix(in srgb, var(--green) 7%, #fff);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0; width:100%; min-width:100%; color:var(--ink); font-family:ui-sans-serif,system-ui; background:#f8fafc; display:flex; flex-direction:column; min-height:100vh;}
+  body.no-scroll{overflow:hidden}
+
+  /* Header */
+  .app-header{position: sticky; top:0; z-index:20; background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.85)); border-bottom: 1px solid var(--border);}
+  .container{max-width:1100px; width:100%; margin:0 auto; padding:0 16px;}
+  .header-row{display:flex;align-items:center;justify-content:space-between;gap:12px; height: clamp(52px, 7vw, 96px);}
+  .logo-link{display:flex; align-items:center; height:100%;}
+  .logo-img{display:block; height: calc(100% - 10px); width:auto; object-fit:contain; max-width:100%; transition: transform .18s ease, filter .18s ease;}
+  .logo-link:hover .logo-img{transform: translateY(-1px) scale(1.02); filter: saturate(1.1);}
+  .icon-btn{appearance:none;border:0;background:transparent;padding:6px;margin:0;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;cursor:pointer}
+  .icon-btn:hover{background:rgba(27,94,32,.08)} .icon-btn:active{background:rgba(27,94,32,.12)}
+  .icon{width:24px;height:24px;stroke:var(--green-600);stroke-width:2;fill:none}
+
+  /* Back button */
+  .btn{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:8px 14px;font-weight:700;border:1px solid var(--border);background:#fff;color:var(--green);cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .back-btn{margin-left:auto; margin-right:12px; white-space:nowrap}
+
+  /* Cards / layout */
+  .grid{display:grid;gap:18px;grid-template-columns:1fr; width:100%}
+  .grid > *{min-width:0}
+  @media(min-width:900px){.grid{grid-template-columns:1.05fr .95fr;align-items:start}}
+  .stack{display:grid;gap:18px; width:100%}
+  .stack > *{min-width:0}
+  .card{background:var(--paper);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow); width:100%}
+  .card .card-header{padding:16px 20px 10px;border-bottom:1px solid var(--border);background:linear-gradient(180deg, var(--tint), #fff 80%);border-left:4px solid var(--orange);border-top-left-radius:14px}
+  .card .card-header h2{margin:0;font-size:18px;color:var(--green-600)}
+  .card .card-body{padding:18px 20px}
+
+  /* Fields */
+  .field{display:grid;gap:8px;margin-bottom:14px}
+  .field label{font-size:13px;font-weight:600;color:var(--muted)}
+  .input{display:flex;align-items:center;background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px 12px;width:100%}
+  .input input,.input select{width:100%;min-width:0;border:0;outline:0;font-size:16px;background:transparent;color:var(--ink)}
+
+  /* Tables */
+  .scale-wrap{border:1px solid var(--border);border-radius:12px; width:100%}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left}
+  thead th{background:#f3f7f4;color:var(--green-600);font-size:12px;text-transform:uppercase}
+  .scale tbody tr.active{background:rgba(27,94,32,.10)}
+
+  /* Summary */
+  .result-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px dashed var(--border)}
+  .result-row:last-child{border-bottom:0}
+  .result-row .label{color:var(--muted)}
+  .result-row .value{font-weight:700}
+  .result-row .value.large{font-size:20px}
+  .tiny-note{font-size:12px;color:#9aa3ad;margin-top:6px;text-align:right}
+
+  footer{margin-top:auto;padding:12px 0;text-align:center;font-size:13px;color:#bbb;}
+
+  /* Slide-over menu */
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,.28);display:none;z-index:30}
+  .overlay.show{display:block}
+  .panel{
+    position:absolute; right:0; top:0; height:100dvh; width:min(90vw,520px);
+    background:#fff; border-left:1px solid var(--border);
+    box-shadow:-16px 0 40px rgba(0,0,0,.18);
+    display:flex; flex-direction:column;
+    transform:translateX(100%); transition:transform .28s ease;
+  }
+  .overlay.show .panel{transform:translateX(0)}
+  .panel-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,var(--tint),#fff 80%)}
+  .panel-header h3{margin:0;font-size:16px;color:var(--green-600)}
+  .panel-body{flex:1; overflow:auto; padding:14px 16px; display:flex; flex-direction:column; gap:12px;}
+  .panel-footer{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:space-between;background:#fff}
+  .menu-row{display:flex;gap:8px;flex-wrap:wrap}
+  .menu-btn{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--ink);font-weight:700;cursor:pointer}
+  .menu-btn.active{background:rgba(27,94,32,.12);color:var(--green-600);border-color:rgba(27,94,32,.2)}
+  .menu-section{border:1px solid var(--border);border-radius:12px;background:#fff}
+  .menu-section-body{padding:12px}
+  .editor input{width:100%;border:1px solid var(--border);border-radius:10px;padding:6px}
+  .chip{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:#fff}
+  .chip .pill{font-weight:700;color:var(--green-600)}
+  .action-sm{padding:6px 10px;border-radius:10px;font-weight:700;border:1px solid var(--border);background:#fff;color:var(--ink);cursor:pointer}
+  .action-sm:hover{background:rgba(27,94,32,.08)}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="container header-row">
+    <a href="index.html" class="logo-link" title="Go to Home">
+      <img src="images/HI-Emblem-green.png" alt="Holiday Inn Club Vacations Logo" class="logo-img">
+    </a>
+    <button class="btn back-btn" id="backToSites" type="button" title="Back to Site Selection">← Site Selection</button>
+    <button class="icon-btn" id="menuBtn" aria-label="Open menu"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+  </div>
+</header>
+
+<main class="container" style="padding-top:16px;">
+  <div class="grid">
+    <!-- LEFT: Month Selector + Pay Scale -->
+    <section class="card">
+      <div class="card-header"><h2>Select Month</h2></div>
+      <div class="card-body">
+        <div class="field">
+          <label for="month">Month</label>
+          <div class="input">
+            <select id="month">
+              <option>January</option><option>February</option><option>March</option>
+              <option>April</option><option>May</option><option>June</option>
+              <option>July</option><option>August</option><option>September</option>
+              <option>October</option><option>November</option><option>December</option>
+            </select>
+          </div>
+        </div>
+        <div style="text-align:right;margin:6px 0 12px;">
+          <button id="toggleScale" class="btn" aria-expanded="true">Hide Pay Scale</button>
+        </div>
+        <div id="scaleRegion" class="scale-wrap">
+          <table class="scale" id="scaleTable">
+            <thead><tr><th>Tours</th><th>Rate</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: Inputs + Summary -->
+    <div class="stack">
+      <section class="card">
+        <div class="card-header"><h2>Tour Inputs</h2></div>
+        <div class="card-body">
+          <div class="field"><label for="owners">Owners</label><div class="input"><input id="owners" type="number" min="0" placeholder="0"></div></div>
+          <div class="field"><label for="goos">GOOs</label><div class="input"><input id="goos" type="number" min="0" placeholder="0"></div></div>
+          <div class="field"><label for="renters">Renters</label><div class="input"><input id="renters" type="number" min="0" placeholder="0"></div></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Summary</h2></div>
+        <div class="card-body">
+          <div class="result-row"><div class="label"><strong>Grand Total</strong></div><div class="value large" id="grandTotal">$0.00</div></div>
+          <div class="result-row"><div class="label">Total Tours</div><div class="value" id="totalTours">0</div></div>
+          <div class="result-row"><div class="label">Rate</div><div class="value" id="selectedRate">$0.00</div></div>
+          <div class="result-row"><div class="label">Tours Pay</div><div class="value" id="toursPay">$0.00</div></div>
+          <!-- Renter Bonus row intentionally removed -->
+          <div class="result-row"><div class="label"><strong>Monthly Points Total</strong></div><div class="value" id="pointsTotal">0</div></div>
+          <div class="result-row" style="font-size:12.5px;color:#9aa3ad;">
+            <div class="label">Points — Owners: <span id="ownersPts">0</span> • GOOs: <span id="goosPts">0</span> • Renters: <span id="rentersPts">0</span></div>
+          </div>
+          <div class="result-row"><div class="label"><strong>Trip Points</strong></div><div class="value" id="tripPoints">0</div></div>
+          <div class="tiny-note" id="tripPointsStamp">Last added: —</div>
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px;">
+            <button id="resetTripPoints" class="btn">Reset Trip Points</button>
+            <button id="addTripPoints" class="btn" disabled style="background:var(--green);color:#fff;border-color:var(--green)">Add to Trip Points</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>Created by Aaron Feight 2025</footer>
+
+<!-- Slide-over Menu -->
+<div class="overlay" id="menuOverlay">
+  <aside class="panel" role="dialog" aria-modal="true" aria-labelledby="editorTitle">
+    <div class="panel-header">
+      <h3 id="editorTitle">Edit Settings</h3>
+      <button class="icon-btn" id="closeMenu" aria-label="Close menu"><svg class="icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+
+    <div class="panel-body">
+      <div class="menu-row" role="tablist" aria-label="Settings sections">
+        <button class="menu-btn active" data-target="sectionScale" role="tab" aria-selected="true" aria-controls="sectionScale">Monthly Pay Scale</button>
+        <button class="menu-btn" data-target="sectionPoints" role="tab" aria-selected="false" aria-controls="sectionPoints">Points</button>
+      </div>
+
+      <!-- Pay Scale Editor -->
+      <div id="sectionScale" class="menu-section" role="tabpanel">
+        <div class="menu-section-body">
+          <table class="editor" id="editorTable">
+            <thead><tr><th>Tours</th><th>Rate</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p style="margin:8px 0 0;font-size:12px;color:#6b7280;">Note: A hidden “&lt; first threshold = $0” tier is always enforced.</p>
+        </div>
+      </div>
+
+      <!-- Points Editor + Point Log -->
+      <div id="sectionPoints" class="menu-section" role="tabpanel" hidden>
+        <div class="menu-section-body" style="display:grid;gap:12px">
+          <div class="field"><label for="ptsOwners">Owners (points per tour)</label><div class="input"><input id="ptsOwners" type="number" min="0"></div></div>
+          <div class="field"><label for="ptsGOO">GOOs (points per tour)</label><div class="input"><input id="ptsGOO" type="number" min="0"></div></div>
+          <div class="field"><label for="ptsRenters">Renters (points per tour)</label><div class="input"><input id="ptsRenters" type="number" min="0"></div></div>
+
+          <div class="chip" aria-live="polite">Trip Points total: <span class="pill" id="tripPointsMenu">0</span></div>
+
+          <table id="tripLogTable">
+            <thead><tr><th>Date</th><th>Points</th><th>Action</th></tr></thead>
+            <tbody><!-- rows injected --></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-footer">
+      <button class="btn" id="resetMonth" type="button">Reset Month</button>
+      <div style="display:flex; gap:10px;">
+        <button class="btn" id="cancelEdit" type="button">Cancel</button>
+        <button class="btn" id="saveAll" type="button" style="background:var(--green);color:#fff;border-color:var(--green)">Save</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+(() => {
+  /* ===== Constants ===== */
+  const HOURLY_TOTAL = 37.5 * 15; // included in Grand Total
+  const DEFAULT_POINTS = { owners:1250, goos:1570, renters:1570 };
+  // Visible thresholds only; hidden zero tier enforced separately
+  const DEFAULT_VISIBLE = [
+    {min:7, rate:35}, {min:10, rate:55}, {min:12, rate:75},
+    {min:14, rate:80}, {min:17, rate:85}, {min:19, rate:90},
+    {min:22, rate:95}, {min:24, rate:100}, {min:26, rate:105}
+  ];
+
+  /* ===== DOM ===== */
+  const owners = document.getElementById('owners');
+  const goos = document.getElementById('goos');
+  const renters = document.getElementById('renters');
+
+  const totalToursEl = document.getElementById('totalTours');
+  const selectedRateEl = document.getElementById('selectedRate');
+  const toursPayEl = document.getElementById('toursPay');
+  const grandTotalEl = document.getElementById('grandTotal');
+
+  const ownersPtsEl = document.getElementById('ownersPts');
+  const goosPtsEl = document.getElementById('goosPts');
+  const rentersPtsEl = document.getElementById('rentersPts');
+  const pointsTotalEl = document.getElementById('pointsTotal');
+
+  const tripPointsEl = document.getElementById('tripPoints');
+  const tripStampEl = document.getElementById('tripPointsStamp');
+  const addTripBtn = document.getElementById('addTripPoints');
+  const resetTripBtn = document.getElementById('resetTripPoints');
+
+  const monthSel = document.getElementById('month');
+  const scaleBody = document.querySelector('#scaleTable tbody');
+  const toggleBtn = document.getElementById('toggleScale');
+  const scaleRegion = document.getElementById('scaleRegion');
+
+  // Menu
+  const menuBtn = document.getElementById('menuBtn');
+  const overlay = document.getElementById('menuOverlay');
+  const closeMenu = document.getElementById('closeMenu');
+  const cancelEdit = document.getElementById('cancelEdit');
+  const saveAllBtn = document.getElementById('saveAll');
+  const resetMonthBtn = document.getElementById('resetMonth');
+  const editorTableBody = document.querySelector('#editorTable tbody');
+
+  const selectorBtns = [...document.querySelectorAll('.menu-btn')];
+  const sectionScale = document.getElementById('sectionScale');
+  const sectionPoints = document.getElementById('sectionPoints');
+  const ptsOwners = document.getElementById('ptsOwners');
+  const ptsGOO = document.getElementById('ptsGOO');
+  const ptsRenters = document.getElementById('ptsRenters');
+
+  // Menu Trip log
+  const tripPointsMenu = document.getElementById('tripPointsMenu');
+  const tripLogTbody = document.querySelector('#tripLogTable tbody');
+
+  /* ===== Storage Keys ===== */
+  const LS_SCALES = 'scales';            // per-month arrays (first row always {min:0,rate:0})
+  const LS_POINTS = 'pointSettings';
+  const LS_TRIP = 'tripPointsTotal';
+  const LS_TRIP_TS = 'tripPointsLastTs';
+  const LS_TRIP_LOG = 'tripPointsLog';   // [{ts, points}]
+  const LS_SELECTED_MONTH = 'selectedMonth';
+  const LS_SCALE_VISIBLE = 'scaleVisible';
+
+  /* ===== State ===== */
+  let scales = JSON.parse(localStorage.getItem(LS_SCALES) || '{}');
+  let pointSettings = JSON.parse(localStorage.getItem(LS_POINTS) || 'null') || { ...DEFAULT_POINTS };
+  let tripPoints = parseInt(localStorage.getItem(LS_TRIP) || '0', 10) || 0;
+  let tripTs = localStorage.getItem(LS_TRIP_TS) || '';
+  let tripLog = JSON.parse(localStorage.getItem(LS_TRIP_LOG) || '[]'); // [{ts, points}]
+
+  /* ===== Helpers ===== */
+  const currency = v => (+v || 0).toLocaleString(undefined,{style:'currency',currency:'USD'});
+  const intfmt = v => (+v || 0).toLocaleString(undefined);
+  const parseMoney = s => parseFloat(String(s).replace(/[^\d.-]/g,'')) || 0;
+  const parseTours = s => { const n = parseInt(String(s).replace(/[^\d]/g,''),10); return Number.isFinite(n) && n >= 0 ? n : 0; };
+  const fmtDate = iso => { const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleDateString(undefined, {year:'numeric', month:'short', day:'numeric'}); };
+
+  function ensureMonth(month){
+    const existing = scales[month];
+    if(!Array.isArray(existing) || !existing.length){
+      scales[month] = [{min:0, rate:0}, ...DEFAULT_VISIBLE];
+    } else {
+      const dedup = new Map();
+      for(const r of existing){
+        const m = Math.max(0, parseTours(r.min));
+        dedup.set(m, {min:m, rate:parseMoney(r.rate)});
+      }
+      dedup.set(0, {min:0, rate:0});
+      scales[month] = [...dedup.values()].sort((a,b)=>a.min-b.min);
+    }
+    localStorage.setItem(LS_SCALES, JSON.stringify(scales));
+    return scales[month];
+  }
+  const getAsc  = m => ensureMonth(m).slice().sort((a,b)=>a.min-b.min);
+  const getDesc = m => ensureMonth(m).slice().sort((a,b)=>b.min-a.min);
+  const getVisibleAsc = m => getAsc(m).filter(r=>r.min!==0);
+
+  /* ===== Rendering ===== */
+  function renderScaleTable(month){
+    const rows = getVisibleAsc(month);
+    scaleBody.innerHTML = rows.map(r => `<tr data-min="${r.min}"><td>${r.min}</td><td>${currency(r.rate)}</td></tr>`).join('');
+  }
+
+  function highlightRow(total){
+    const asc = getAsc(monthSel.value);
+    let match = 0;
+    for(const r of asc){ if(total >= r.min) match = r.min; else break; }
+    scaleBody.querySelectorAll('tr').forEach(tr=>tr.classList.remove('active'));
+    if(match !== 0){
+      const tr = scaleBody.querySelector(`tr[data-min="${match}"]`);
+      if(tr) tr.classList.add('active');
+    }
+  }
+
+  function rateForTotal(total){
+    for(const r of getDesc(monthSel.value)){ if(total >= r.min) return r.rate; }
+    return 0;
+  }
+
+  function recalc(){
+    const o = +owners.value || 0, g = +goos.value || 0, r = +renters.value || 0;
+    const total = o + g + r;
+    totalToursEl.textContent = total;
+
+    const rate = rateForTotal(total);
+    selectedRateEl.textContent = currency(rate);
+
+    // Tours Pay:
+    const toursPay = rate * total;
+    toursPayEl.textContent = currency(toursPay);
+
+    // Points:
+    const oPts = o * pointSettings.owners;
+    const gPts = g * pointSettings.goos;
+    const rPts = r * pointSettings.renters;
+    ownersPtsEl.textContent = intfmt(oPts);
+    goosPtsEl.textContent = intfmt(gPts);
+    rentersPtsEl.textContent = intfmt(rPts);
+    pointsTotalEl.textContent = intfmt(oPts + gPts + rPts);
+
+    // Grand total (Hourly base + Tours Pay): renter bonus removed
+    grandTotalEl.textContent = currency(toursPay + HOURLY_TOTAL);
+
+    highlightRow(total);
+    addTripBtn.disabled = false; // enable after any change
+  }
+
+  /* ===== Trip Points & Log ===== */
+  function currentMonthlyPoints(){
+    return parseInt(String(pointsTotalEl.textContent).replace(/[^\d]/g,''),10) || 0;
+  }
+  function saveTripState(){
+    localStorage.setItem(LS_TRIP, String(tripPoints));
+    localStorage.setItem(LS_TRIP_TS, tripTs);
+    localStorage.setItem(LS_TRIP_LOG, JSON.stringify(tripLog));
+  }
+  function updateTripUI(){
+    tripPointsEl.textContent = intfmt(tripPoints);
+    tripPointsMenu.textContent = intfmt(tripPoints);
+    tripStampEl.textContent = 'Last added: ' + (tripTs ? fmtDate(tripTs) : '—');
+  }
+  function renderTripLog(){
+    if(!Array.isArray(tripLog)) tripLog=[];
+    tripLogTbody.innerHTML = tripLog.map((row, idx)=>`
+      <tr data-idx="${idx}">
+        <td>${fmtDate(row.ts)}</td>
+        <td>${intfmt(row.points)}</td>
+        <td><button class="action-sm" data-action="remove" data-idx="${idx}">Remove</button></td>
+      </tr>
+    `).join('') || `<tr><td colspan="3" style="color:#9aa3ad">No entries yet.</td></tr>`;
+  }
+  function addTripLogEntry(points){
+    const entry = { ts: new Date().toISOString(), points: points|0 };
+    tripLog.push(entry);
+    tripPoints += entry.points;
+    tripTs = entry.ts;
+    saveTripState();
+    updateTripUI();
+    renderTripLog();
+  }
+  function removeTripLogEntry(index){
+    const row = tripLog[index];
+    if(!row) return;
+    tripPoints = Math.max(0, tripPoints - (row.points|0));
+    tripLog.splice(index,1);
+    tripTs = tripLog.length ? tripLog[tripLog.length-1].ts : '';
+    saveTripState();
+    updateTripUI();
+    renderTripLog();
+  }
+
+  addTripBtn.addEventListener('click', () => {
+    const add = currentMonthlyPoints();
+    addTripLogEntry(add);
+    addTripBtn.disabled = true;
+  });
+  resetTripBtn.addEventListener('click', () => {
+    if(!confirm('Reset Trip Points and clear all log entries?')) return;
+    tripPoints = 0; tripTs = ''; tripLog = [];
+    saveTripState();
+    updateTripUI();
+    renderTripLog();
+  });
+  tripLogTbody.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-action="remove"]');
+    if(!btn) return;
+    const idx = parseInt(btn.dataset.idx,10);
+    removeTripLogEntry(idx);
+  });
+
+  /* ===== Inputs / Month / Scale visibility ===== */
+  [owners, goos, renters].forEach(el => {
+    el.addEventListener('input', recalc);
+    el.addEventListener('change', recalc);
+  });
+
+  monthSel.addEventListener('change', () => {
+    renderScaleTable(monthSel.value);
+    recalc();
+    localStorage.setItem(LS_SELECTED_MONTH, monthSel.value);
+  });
+
+  toggleBtn.addEventListener('click', () => {
+    const hidden = scaleRegion.style.display === 'none';
+    scaleRegion.style.display = hidden ? '' : 'none';
+    toggleBtn.textContent = hidden ? 'Hide Pay Scale' : 'Show Pay Scale';
+    toggleBtn.setAttribute('aria-expanded', String(hidden));
+    localStorage.setItem(LS_SCALE_VISIBLE, hidden ? 'true' : 'false');
+  });
+
+  /* ===== Menu (slide-over) ===== */
+  function openMenu(){
+    overlay.classList.add('show');
+    document.body.classList.add('no-scroll');
+    activateTab('sectionScale');
+    loadEditor();
+    // load points + trip widgets
+    ptsOwners.value = pointSettings.owners;
+    ptsGOO.value = pointSettings.goos;
+    ptsRenters.value = pointSettings.renters;
+    updateTripUI();
+    renderTripLog();
+  }
+  function closeMenuPanel(){
+    overlay.classList.remove('show');
+    document.body.classList.remove('no-scroll');
+  }
+  document.getElementById('menuBtn').addEventListener('click', openMenu);
+  closeMenu.addEventListener('click', closeMenuPanel);
+  cancelEdit.addEventListener('click', closeMenuPanel);
+  overlay.addEventListener('click', e => { if(e.target === overlay) closeMenuPanel(); });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape' && overlay.classList.contains('show')) closeMenuPanel(); });
+
+  function activateTab(id){
+    selectorBtns.forEach(btn=>{
+      const on = btn.dataset.target===id;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-selected', on?'true':'false');
+    });
+    sectionScale.hidden = id !== 'sectionScale';
+    sectionPoints.hidden = id !== 'sectionPoints';
+  }
+  selectorBtns.forEach(btn=>btn.addEventListener('click', ()=>activateTab(btn.dataset.target)));
+
+  /* ===== Menu: Scale Editor ===== */
+  function loadEditor(){
+    const rows = getVisibleAsc(monthSel.value); // exclude hidden zero tier
+    editorTableBody.innerHTML = rows.map(r => `
+      <tr>
+        <td><input type="number" min="1" step="1" value="${r.min}"></td>
+        <td><input type="number" step="0.01" value="${r.rate}"></td>
+      </tr>
+    `).join('');
+  }
+  function readEditorRows(){
+    const rows = [...editorTableBody.querySelectorAll('tr')].map(tr=>{
+      const [minIn, rateIn] = tr.querySelectorAll('input');
+      return {min: parseTours(minIn.value), rate: parseMoney(rateIn.value)};
+    }).filter(r=> Number.isFinite(r.min) && r.min>0);
+    const uniq = new Map();
+    rows.forEach(r=>uniq.set(r.min, r));
+    return [...uniq.values()].sort((a,b)=>a.min-b.min);
+  }
+
+  saveAllBtn.addEventListener('click', () => {
+    const vis = readEditorRows();
+    scales[monthSel.value] = [{min:0, rate:0}, ...vis]; // enforce hidden zero tier
+    localStorage.setItem(LS_SCALES, JSON.stringify(scales));
+
+    pointSettings = {
+      owners: Math.max(0, parseInt(ptsOwners.value || DEFAULT_POINTS.owners, 10) || DEFAULT_POINTS.owners),
+      goos:   Math.max(0, parseInt(ptsGOO.value   || DEFAULT_POINTS.goos,   10) || DEFAULT_POINTS.goos),
+      renters: Math.max(0, parseInt(ptsRenters.value|| DEFAULT_POINTS.renters,10) || DEFAULT_POINTS.renters)
+    };
+    localStorage.setItem(LS_POINTS, JSON.stringify(pointSettings));
+
+    renderScaleTable(monthSel.value);
+    recalc();
+    closeMenuPanel();
+  });
+
+  resetMonthBtn.addEventListener('click', () => {
+    if(!confirm('Reset this month to defaults?')) return;
+    scales[monthSel.value] = [{min:0, rate:0}, ...DEFAULT_VISIBLE];
+    localStorage.setItem(LS_SCALES, JSON.stringify(scales));
+    loadEditor();
+    renderScaleTable(monthSel.value);
+    recalc();
+  });
+
+  /* ===== Back to site selection ===== */
+  document.getElementById('backToSites').addEventListener('click', () => {
+    // Navigate to the local site selection page
+    window.location.href = 'site-selection.html';
+  });
+
+  /* ===== Init ===== */
+  const savedMonth = localStorage.getItem(LS_SELECTED_MONTH);
+  monthSel.value = savedMonth && [...monthSel.options].some(o => o.value===savedMonth) ? savedMonth : 'August';
+
+  const vis = localStorage.getItem(LS_SCALE_VISIBLE);
+  if(vis==='false'){
+    scaleRegion.style.display='none';
+    toggleBtn.textContent='Show Pay Scale';
+    toggleBtn.setAttribute('aria-expanded','false');
+  }
+
+  ensureMonth(monthSel.value);
+  renderScaleTable(monthSel.value);
+  updateTripUI();
+  renderTripLog();
+  recalc();
+})();
+</script>
+</body>
+</html>
