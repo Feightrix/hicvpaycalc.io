@@ -32,17 +32,15 @@
   .logo-link{
     display:inline-flex; align-items:center; text-decoration:none;
     transition:filter .2s ease, opacity .2s ease;
+    height:100%;
   }
-  .logo-link:hover{
-    filter:brightness(1.05);
-    opacity:.9;
-  }
+  .logo-link:hover{ filter:brightness(1.05); opacity:.9; }
   .logo-img{
-    display:block;
-    height:clamp(38px, 6vw, 72px);
-    width:auto;
-    object-fit:contain;
+    display:block; height:calc(100% - 10px); width:auto; object-fit:contain;
   }
+
+  /* Welcome */
+  .welcome{font-weight:700;color:var(--green-600); font-size:14px; margin-right:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:40ch;}
 
   /* Back pill button */
   .back-btn{
@@ -53,10 +51,7 @@
     box-shadow:0 1px 0 rgba(0,0,0,.02);
     transition:transform .03s ease, background .15s ease, box-shadow .15s ease;
   }
-  .back-btn svg{
-    width:18px; height:18px; display:block;
-    stroke:var(--green); stroke-width:2.2; fill:none; flex-shrink:0
-  }
+  .back-btn svg{ width:18px; height:18px; display:block; stroke:var(--green); stroke-width:2.2; fill:none; flex-shrink:0 }
   .back-btn:hover{background:#f9fafb; box-shadow:0 2px 10px rgba(0,0,0,.04)}
   .back-btn:active{transform:translateY(1px)}
   .back-btn:focus-visible{outline:3px solid color-mix(in srgb, var(--green) 18%, transparent); outline-offset:2px}
@@ -151,17 +146,17 @@
 <header class="app-header">
   <div class="container header-row">
     <!-- Clickable local logo with hover effect -->
-    <a href="index.html" class="logo-link">
-      <img src="images/HI-Emblem-green.png"
-           alt="Holiday Inn Club Vacations Logo" class="logo-img">
+    <a href="index.html" class="logo-link" aria-label="Home">
+      <img src="images/HI-Emblem-green.png" alt="Holiday Inn Club Vacations Emblem" class="logo-img">
     </a>
 
-    <a href="index.html" class="back-btn" aria-label="Go Back to previous page">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7 12h13M7 12l5-5M7 12l5 5"/>
-      </svg>
-      <span>Go Back</span>
-    </a>
+    <div style="display:flex; align-items:center; gap:10px">
+      <div id="welcome" class="welcome" aria-live="polite"></div>
+      <a href="index.html" class="back-btn" aria-label="Go Back to previous page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12h13M7 12l5-5M7 12l5 5"/></svg>
+        <span>Go Back</span>
+      </a>
+    </div>
   </div>
 </header>
 
@@ -186,9 +181,42 @@
 <footer>Created by Aaron Feight 2025</footer>
 
 <script>
+/* =========================
+   Persist API (shared)
+   ========================= */
+const Persist = (() => {
+  const LOCAL_PREFIX = 'hi-calc:v1';
+  const key = (emp,page)=> `${LOCAL_PREFIX}:${emp}:${page}`;
+  async function load(emp,page){ if(!emp) return null; const raw = localStorage.getItem(key(emp,page)); return raw ? JSON.parse(raw) : null; }
+  async function save(emp,page,data){ if(!emp) return; localStorage.setItem(key(emp,page), JSON.stringify(data)); return true; }
+  function getLastEmployee(){ return localStorage.getItem(`${LOCAL_PREFIX}:last-employee`) || ''; }
+  return {load, save, getLastEmployee};
+})();
+
 (() => {
-  const LS_KEY = 'siteSelection';
-  function pageForSite(id){return (id === 'south-beach') ? 'HICV-MB-Pay-Calc.html' : 'HICV-General-Pay-Calc.html';}
+  /* ===== Employee context & guard ===== */
+  const welcomeEl = document.getElementById('welcome');
+  const lastEmp = Persist.getLastEmployee();
+  if(!lastEmp){
+    // No active session -> send back to splash / login
+    window.location.href = 'index.html';
+    return;
+  }
+
+  // Pull first-name greeting from calculator-selection page state if present
+  (async () => {
+    const sel = await Persist.load(lastEmp, 'calculator-selection');
+    const first = sel && sel.name ? String(sel.name) : '';
+    welcomeEl.textContent = first ? `Welcome, ${first}` : 'Welcome';
+  })();
+
+  /* ===== Routing rules per site ===== */
+  function pageForSite(id){
+    // Keep your existing mapping
+    return (id === 'south-beach') ? 'HICV-MB-Pay-Calc.html' : 'HICV-General-Pay-Calc.html';
+  }
+
+  /* ===== Sites data ===== */
   const SITES = [
     { id:'cape-canaveral',name:'Cape Canaveral',img:'https://images.contentstack.io/v3/assets/bltba617d00249585dc/bltd5e047ac82ec503c/61a794c237c855238d66ec0c/cape-canaveral-resort-property-building-sunset-1440x1080.jpg'},
     { id:'david-walleys',name:'David Walleys',img:'https://images.contentstack.io/v3/assets/bltba617d00249585dc/blt08b954f4f80c7ee7/5e290fd1bad1555533de72e0/DWR_Amenities_HotSprings_Pool_001.jpg'},
@@ -203,11 +231,16 @@
     { id:'williamsburg',name:'Williamsburg',img:'https://images.contentstack.io/v3/assets/bltba617d00249585dc/blt0dd0b98197e30327/5daf1a6adf78486c826dc4b9/holiday-inn-club-vacations-williamsburg-5745140523-16x5.jpeg'}
   ];
 
+  /* ===== DOM ===== */
   const siteGrid=document.getElementById('siteGrid');
   const continueBtn=document.getElementById('continueBtn');
   const clearBtn=document.getElementById('clearBtn');
+
+  /* ===== State ===== */
+  const PAGE_ID = 'site-selection';
   let selectedId=null;
 
+  /* ===== Render ===== */
   function renderGrid(){
     siteGrid.innerHTML=SITES.map((s,idx)=>`
       <button class="site-card" role="radio" aria-checked="false" tabindex="${idx===0?'0':'-1'}" data-id="${s.id}" data-name="${s.name}">
@@ -235,25 +268,50 @@
     else{root.classList.remove('has-selection');}
   }
 
-  renderGrid();
+  /* ===== Load persisted selection (with legacy import) ===== */
+  async function loadSelection(){
+    // One-time legacy import if the old key exists
+    const legacy = localStorage.getItem('siteSelection');
+    if(legacy){
+      // Validate legacy value
+      const legacyId = String(legacy);
+      if(SITES.some(s=>s.id===legacyId)){
+        await Persist.save(lastEmp, PAGE_ID, { selectedSiteId: legacyId, selectedSiteName: SITES.find(s=>s.id===legacyId).name, ts: Date.now() });
+      }
+      localStorage.removeItem('siteSelection');
+    }
 
-  const savedId=localStorage.getItem(LS_KEY);
-  if(savedId&&SITES.some(s=>s.id===savedId)){updateSelection(savedId,false);}
+    const rec = await Persist.load(lastEmp, PAGE_ID);
+    if(rec && rec.selectedSiteId && SITES.some(s=>s.id===rec.selectedSiteId)){
+      updateSelection(rec.selectedSiteId, false);
+    }
+  }
 
-  siteGrid.addEventListener('click',e=>{
+  /* ===== Save selection ===== */
+  async function persistSelection(){
+    if(!selectedId) return;
+    const s = SITES.find(x=>x.id===selectedId);
+    await Persist.save(lastEmp, PAGE_ID, {
+      selectedSiteId: selectedId,
+      selectedSiteName: s ? s.name : selectedId,
+      ts: Date.now()
+    });
+  }
+
+  /* ===== Events ===== */
+  function onCardClick(e){
     const card=e.target.closest('.site-card');
     if(!card)return;
     updateSelection(card.dataset.id);
-  });
+  }
 
-  continueBtn.addEventListener('click',()=>{
-    if(!selectedId)return;
-    localStorage.setItem(LS_KEY,selectedId);
-    window.location.href=pageForSite(selectedId);
-  });
+  async function onContinue(){
+    if(!selectedId) return;
+    await persistSelection();
+    window.location.href = pageForSite(selectedId);
+  }
 
-  clearBtn.addEventListener('click',()=>{
-    localStorage.removeItem(LS_KEY);
+  async function onClear(){
     selectedId=null;
     continueBtn.disabled=true;
     siteGrid.classList.remove('has-selection');
@@ -262,7 +320,19 @@
       c.tabIndex=i===0?0:-1;
     });
     siteGrid.querySelector('.site-card')?.focus();
-  });
+    // Clear only this page's state (keep employee/session)
+    await Persist.save(lastEmp, PAGE_ID, { selectedSiteId: '', selectedSiteName: '', ts: Date.now() });
+  }
+
+  /* ===== Init ===== */
+  (async function init(){
+    renderGrid();
+    await loadSelection();
+    siteGrid.addEventListener('click', onCardClick);
+    continueBtn.addEventListener('click', onContinue);
+    clearBtn.addEventListener('click', onClear);
+  })();
+
 })();
 </script>
 

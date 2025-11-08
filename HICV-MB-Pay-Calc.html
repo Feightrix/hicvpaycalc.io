@@ -26,10 +26,14 @@
   .icon-btn:hover{background:rgba(27,94,32,.08)} .icon-btn:active{background:rgba(27,94,32,.12)}
   .icon{width:24px;height:24px;stroke:var(--green-600);stroke-width:2;fill:none}
 
-  /* Back button */
+  /* Buttons / chips */
   .btn{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:8px 14px;font-weight:700;border:1px solid var(--border);background:#fff;color:var(--green);cursor:pointer}
   .btn:disabled{opacity:.5;cursor:not-allowed}
-  .back-btn{margin-left:auto; margin-right:12px; white-space:nowrap}
+  .back-btn{white-space:nowrap}
+  .right-header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:#fff;font-weight:700}
+  .chip .muted{color:var(--muted);font-weight:600}
+  .welcome{font-weight:800;color:var(--green-600);}
 
   /* Cards / layout */
   .grid{display:grid;gap:18px;grid-template-columns:1fr; width:100%}
@@ -86,10 +90,9 @@
   .menu-section{border:1px solid var(--border);border-radius:12px;background:#fff}
   .menu-section-body{padding:12px}
   .editor input{width:100%;border:1px solid var(--border);border-radius:10px;padding:6px}
-  .chip{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:#fff}
-  .chip .pill{font-weight:700;color:var(--green-600)}
   .action-sm{padding:6px 10px;border-radius:10px;font-weight:700;border:1px solid var(--border);background:#fff;color:var(--ink);cursor:pointer}
   .action-sm:hover{background:rgba(27,94,32,.08)}
+  .helper{font-size:12px;color:#6b7280}
 </style>
 </head>
 <body>
@@ -99,8 +102,12 @@
     <a href="index.html" class="logo-link" title="Go to Home">
       <img src="images/HI-Emblem-green.png" alt="Holiday Inn Club Vacations Logo" class="logo-img">
     </a>
-    <button class="btn back-btn" id="backToSites" type="button" title="Back to Site Selection">← Site Selection</button>
-    <button class="icon-btn" id="menuBtn" aria-label="Open menu"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    <div class="right-header">
+      <span id="welcome" class="welcome" aria-live="polite"></span>
+      <span id="siteChip" class="chip" title="Current Site" aria-live="polite"><span class="muted">Site:</span> <span id="siteName">—</span></span>
+      <button class="btn back-btn" id="backToSites" type="button" title="Back to Site Selection">← Site Selection</button>
+      <button class="icon-btn" id="menuBtn" aria-label="Open menu"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    </div>
   </div>
 </header>
 
@@ -191,7 +198,22 @@
             <thead><tr><th>Tours</th><th>Rate</th></tr></thead>
             <tbody></tbody>
           </table>
-          <!-- note removed -->
+
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+            <button class="btn" id="importScaleCsv" type="button">Import CSV</button>
+            <button class="btn" id="exportScaleCsv" type="button">Export CSV</button>
+            <input type="file" id="scaleCsvInput" accept=".csv,text/csv" style="display:none">
+          </div>
+          <div id="scaleCsvStatus" class="helper" aria-live="polite" style="margin-top:6px"></div>
+          <details class="helper" style="margin-top:6px">
+            <summary>CSV format help</summary>
+            <div style="margin-top:6px">
+              Two columns: <code>Tours,Rate</code>. Header optional. Examples:<br>
+              <code>7, 35</code><br>
+              <code>10, 55</code><br>
+              Non-numeric or duplicate rows are skipped. Row order doesn’t matter.
+            </div>
+          </details>
         </div>
       </div>
 
@@ -202,7 +224,7 @@
           <div class="field"><label for="ptsGOO">GOOs (points per tour)</label><div class="input"><input id="ptsGOO" type="number" min="0"></div></div>
           <div class="field"><label for="ptsRenters">Renters (points per tour)</label><div class="input"><input id="ptsRenters" type="number" min="0"></div></div>
 
-          <div class="chip" aria-live="polite">Trip Points total: <span class="pill" id="tripPointsMenu">0</span></div>
+          <div class="chip" aria-live="polite">Trip Points total: <span class="welcome" id="tripPointsMenu">0</span></div>
 
           <table id="tripLogTable">
             <thead><tr><th>Date</th><th>Points</th><th>Action</th></tr></thead>
@@ -223,12 +245,52 @@
 </div>
 
 <script>
+/* =========================
+   Persist API (shared)
+   ========================= */
+const Persist = (() => {
+  const LOCAL_PREFIX = 'hi-calc:v1';
+  const key = (emp,page)=> `${LOCAL_PREFIX}:${emp}:${page}`;
+  async function load(emp,page){ if(!emp) return null; const raw = localStorage.getItem(key(emp,page)); return raw ? JSON.parse(raw) : null; }
+  async function save(emp,page,data){ if(!emp) return; localStorage.setItem(key(emp,page), JSON.stringify(data)); return true; }
+  function getLastEmployee(){ return localStorage.getItem(`${LOCAL_PREFIX}:last-employee`) || ''; }
+  return {load, save, getLastEmployee};
+})();
+
 (() => {
+  /* ===== Employee/session context ===== */
+  const EMP = Persist.getLastEmployee();
+  if(!EMP){ window.location.href = 'index.html'; return; }
+
+  // Welcome + site chip
+  const welcomeEl = document.getElementById('welcome');
+  const siteNameEl = document.getElementById('siteName');
+
+  (async () => {
+    const sel = await Persist.load(EMP, 'calculator-selection');
+    const first = sel && sel.name ? String(sel.name) : '';
+    welcomeEl.textContent = first ? `Welcome, ${first}` : 'Welcome';
+
+    const siteRec = await Persist.load(EMP, 'site-selection');
+    const sname = siteRec && siteRec.selectedSiteName ? siteRec.selectedSiteName : '—';
+    siteNameEl.textContent = sname;
+  })();
+
+  /* ===== Namespaced storage keys (per-employee) ===== */
+  const PREFIX = `hi-calc:v1:${EMP}:pay-renter`;
+  const LS_SCALES         = `${PREFIX}:scales`;
+  const LS_POINTS         = `${PREFIX}:pointSettings`;
+  const LS_TRIP           = `${PREFIX}:tripPointsTotal`;
+  const LS_TRIP_TS        = `${PREFIX}:tripPointsLastTs`;
+  const LS_TRIP_LOG       = `${PREFIX}:tripPointsLog`;
+  const LS_SELECTED_MONTH = `${PREFIX}:selectedMonth`;
+  const LS_SCALE_VISIBLE  = `${PREFIX}:scaleVisible`;
+  const LS_INPUTS         = `${PREFIX}:inputs`;
+
   /* ===== Constants ===== */
   const HOURLY_TOTAL = 37.5 * 15; // included in Grand Total
-  const RENTER_BONUS_RATE = 40;    // $40 per renter
+  const RENTER_BONUS_RATE = 40;   // $40 per renter
   const DEFAULT_POINTS = { owners:1250, goos:1570, renters:1570 };
-  // Visible thresholds only; hidden zero tier enforced separately
   const DEFAULT_VISIBLE = [
     {min:7, rate:35}, {min:10, rate:55}, {min:12, rate:75},
     {min:14, rate:80}, {min:17, rate:85}, {min:19, rate:90},
@@ -277,25 +339,22 @@
   const ptsGOO = document.getElementById('ptsGOO');
   const ptsRenters = document.getElementById('ptsRenters');
 
+  // CSV controls (scale)
+  const importScaleCsvBtn = document.getElementById('importScaleCsv');
+  const exportScaleCsvBtn = document.getElementById('exportScaleCsv');
+  const scaleCsvInput = document.getElementById('scaleCsvInput');
+  const scaleCsvStatus = document.getElementById('scaleCsvStatus');
+
   // Menu Trip log
   const tripPointsMenu = document.getElementById('tripPointsMenu');
   const tripLogTbody = document.querySelector('#tripLogTable tbody');
 
-  /* ===== Storage Keys ===== */
-  const LS_SCALES = 'scales';            // per-month arrays (first row always {min:0,rate:0})
-  const LS_POINTS = 'pointSettings';
-  const LS_TRIP = 'tripPointsTotal';
-  const LS_TRIP_TS = 'tripPointsLastTs';
-  const LS_TRIP_LOG = 'tripPointsLog';   // [{ts, points}]
-  const LS_SELECTED_MONTH = 'selectedMonth';
-  const LS_SCALE_VISIBLE = 'scaleVisible';
-
-  /* ===== State ===== */
+  /* ===== State (from storage) ===== */
   let scales = JSON.parse(localStorage.getItem(LS_SCALES) || '{}');
   let pointSettings = JSON.parse(localStorage.getItem(LS_POINTS) || 'null') || { ...DEFAULT_POINTS };
   let tripPoints = parseInt(localStorage.getItem(LS_TRIP) || '0', 10) || 0;
   let tripTs = localStorage.getItem(LS_TRIP_TS) || '';
-  let tripLog = JSON.parse(localStorage.getItem(LS_TRIP_LOG) || '[]'); // [{ts, points}]
+  let tripLog = JSON.parse(localStorage.getItem(LS_TRIP_LOG) || '[]');
 
   /* ===== Helpers ===== */
   const currency = v => (+v || 0).toLocaleString(undefined,{style:'currency',currency:'USD'});
@@ -303,6 +362,27 @@
   const parseMoney = s => parseFloat(String(s).replace(/[^\d.-]/g,'')) || 0;
   const parseTours = s => { const n = parseInt(String(s).replace(/[^\d]/g,''),10); return Number.isFinite(n) && n >= 0 ? n : 0; };
   const fmtDate = iso => { const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleDateString(undefined, {year:'numeric', month:'short', day:'numeric'}); };
+
+  function saveInputs(){
+    const data = {
+      month: monthSel.value,
+      owners: +owners.value || 0,
+      goos: +goos.value || 0,
+      renters: +renters.value || 0
+    };
+    localStorage.setItem(LS_INPUTS, JSON.stringify(data));
+  }
+  function loadInputs(){
+    const raw = localStorage.getItem(LS_INPUTS);
+    if(!raw) return;
+    try{
+      const d = JSON.parse(raw);
+      if(d && d.month && [...monthSel.options].some(o=>o.value===d.month)) monthSel.value = d.month;
+      if(Number.isFinite(+d.owners)) owners.value = d.owners;
+      if(Number.isFinite(+d.goos)) goos.value = d.goos;
+      if(Number.isFinite(+d.renters)) renters.value = d.renters;
+    }catch(_){}
+  }
 
   function ensureMonth(month){
     const existing = scales[month];
@@ -354,15 +434,12 @@
     const rate = rateForTotal(total);
     selectedRateEl.textContent = currency(rate);
 
-    // Tours Pay:
     const toursPay = rate * total;
     toursPayEl.textContent = currency(toursPay);
 
-    // Renter Bonus:
     const renterBonus = r * RENTER_BONUS_RATE;
     renterBonusEl.textContent = currency(renterBonus);
 
-    // Points:
     const oPts = o * pointSettings.owners;
     const gPts = g * pointSettings.goos;
     const rPts = r * pointSettings.renters;
@@ -371,11 +448,12 @@
     rentersPtsEl.textContent = intfmt(rPts);
     pointsTotalEl.textContent = intfmt(oPts + gPts + rPts);
 
-    // Grand total (Hourly base + Tours Pay + Renter Bonus)
     grandTotalEl.textContent = currency(toursPay + renterBonus + HOURLY_TOTAL);
 
     highlightRow(total);
-    addTripBtn.disabled = false; // enable after any change
+    addTripBtn.disabled = false;
+
+    saveInputs();
   }
 
   /* ===== Trip Points & Log ===== */
@@ -451,6 +529,7 @@
     renderScaleTable(monthSel.value);
     recalc();
     localStorage.setItem(LS_SELECTED_MONTH, monthSel.value);
+    if (overlay.classList.contains('show')) loadEditor();
   });
 
   toggleBtn.addEventListener('click', () => {
@@ -467,7 +546,6 @@
     document.body.classList.add('no-scroll');
     activateTab('sectionScale');
     loadEditor();
-    // load points + trip widgets
     ptsOwners.value = pointSettings.owners;
     ptsGOO.value = pointSettings.goos;
     ptsRenters.value = pointSettings.renters;
@@ -495,15 +573,16 @@
   }
   selectorBtns.forEach(btn=>btn.addEventListener('click', ()=>activateTab(btn.dataset.target)));
 
-  /* ===== Menu: Scale Editor ===== */
+  /* ===== Menu: Scale Editor (table <-> storage) ===== */
   function loadEditor(){
-    const rows = getVisibleAsc(monthSel.value); // exclude hidden zero tier
+    const rows = getVisibleAsc(monthSel.value);
     editorTableBody.innerHTML = rows.map(r => `
       <tr>
-        <td><input type="number" min="1" step="1" value="\${r.min}"></td>
-        <td><input type="number" step="0.01" value="\${r.rate}"></td>
+        <td><input type="number" min="1" step="1" value="${r.min}"></td>
+        <td><input type="number" step="0.01" value="${r.rate}"></td>
       </tr>
     `).join('');
+    scaleCsvStatus.textContent = '';
   }
   function readEditorRows(){
     const rows = [...editorTableBody.querySelectorAll('tr')].map(tr=>{
@@ -517,7 +596,7 @@
 
   saveAllBtn.addEventListener('click', () => {
     const vis = readEditorRows();
-    scales[monthSel.value] = [{min:0, rate:0}, ...vis]; // enforce hidden zero tier
+    scales[monthSel.value] = [{min:0, rate:0}, ...vis];
     localStorage.setItem(LS_SCALES, JSON.stringify(scales));
 
     pointSettings = {
@@ -541,9 +620,79 @@
     recalc();
   });
 
+  /* ===== Scale CSV: Import / Export ===== */
+  importScaleCsvBtn.addEventListener('click', ()=> scaleCsvInput.click());
+  scaleCsvInput.addEventListener('change', handleScaleCsvFile, false);
+
+  function handleScaleCsvFile(e){
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        const text = String(reader.result || '');
+        const res = importScaleFromCsv(text);
+        scaleCsvStatus.textContent =
+          `Imported ${res.added} row${res.added===1?'':'s'} • Skipped ${res.skipped} invalid/duplicates.`;
+        loadEditor();
+        renderScaleTable(monthSel.value);
+        recalc();
+      }catch(err){
+        scaleCsvStatus.textContent = 'Import failed. Please check the CSV format.';
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  function importScaleFromCsv(text){
+    const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    if(!lines.length) return {added:0, skipped:0};
+
+    let i = 0, added = 0, skipped = 0;
+    const maybeHeader = lines[0].toLowerCase();
+    const headerLike = /[a-z]/.test(maybeHeader);
+    if(headerLike) i = 1;
+
+    const map = new Map(); // min -> {min, rate}
+    for(; i<lines.length; i++){
+      const raw = lines[i];
+      if(!raw) continue;
+      const parts = raw.split(',').map(s=>s.trim());
+      if(parts.length < 2){ skipped++; continue; }
+      const min = parseTours(parts[0]);
+      const rate = parseMoney(parts[1]);
+      if(!(Number.isFinite(min) && min>0 && Number.isFinite(rate))){
+        skipped++; continue;
+      }
+      map.set(min, {min, rate}); // dedupe by min
+    }
+
+    const vis = [...map.values()].sort((a,b)=>a.min-b.min);
+    added = vis.length;
+
+    scales[monthSel.value] = [{min:0, rate:0}, ...vis];
+    localStorage.setItem(LS_SCALES, JSON.stringify(scales));
+
+    return {added, skipped};
+  }
+
+  exportScaleCsvBtn.addEventListener('click', ()=>{
+    const rows = getVisibleAsc(monthSel.value);
+    const data = [['Tours','Rate'], ...rows.map(r=>[r.min, r.rate])];
+    const csv = data.map(r=>r.join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pay-scale-${monthSel.value}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
+  });
+
   /* ===== Back to site selection ===== */
   document.getElementById('backToSites').addEventListener('click', () => {
-    // Navigate to the local site selection page
     window.location.href = 'site-selection.html';
   });
 
@@ -560,8 +709,22 @@
 
   ensureMonth(monthSel.value);
   renderScaleTable(monthSel.value);
-  updateTripUI();
-  renderTripLog();
+
+  // Restore inputs per employee
+  loadInputs();
+
+  // Points / log UI
+  (function bootstrapPoints(){
+    if(!localStorage.getItem(LS_POINTS)){
+      localStorage.setItem(LS_POINTS, JSON.stringify(pointSettings));
+    }
+    document.getElementById('ptsOwners').value = pointSettings.owners;
+    document.getElementById('ptsGOO').value = pointSettings.goos;
+    document.getElementById('ptsRenters').value = pointSettings.renters;
+    updateTripUI();
+    renderTripLog();
+  })();
+
   recalc();
 })();
 </script>

@@ -25,6 +25,7 @@
   .icon-btn{appearance:none;border:0;background:transparent;padding:6px;margin:0;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;cursor:pointer}
   .icon-btn:hover{background:rgba(27,94,32,.08)} .icon-btn:active{background:rgba(27,94,32,.12)}
   .icon{width:24px;height:24px;stroke:var(--green-600);stroke-width:2;fill:none}
+  .welcome{font-weight:700;color:var(--green-600); font-size:14px; margin-right:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:40ch;}
 
   /* Layout / Cards */
   .grid{display:grid;gap:18px;grid-template-columns:1fr}
@@ -51,17 +52,13 @@
   .bad{color:var(--bad)}
 
   /* KPIs */
-  /* Mobile stays 2-up; desktop auto-wraps to avoid overflow */
   .kpi{
     display:grid; gap:14px;
-    grid-template-columns: 1fr 1fr; /* mobile default */
+    grid-template-columns: 1fr 1fr;
   }
   @media(min-width:760px){
-    .kpi{
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    }
+    .kpi{ grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
   }
-
   .kpi-snap{display:grid; gap:14px; grid-template-columns: 1fr 1fr}
   @media(min-width:760px){ .kpi-snap{grid-template-columns: repeat(4, 1fr)} }
 
@@ -69,7 +66,7 @@
   .kpi .label, .kpi-snap .label{font-size:12px;color:#6b7280}
   .kpi .value, .kpi-snap .value{font-size:34px;font-weight:900;margin-top:6px}
 
-  /* Progress-border KPI (% of Budget) */
+  /* Progress-border KPI */
   .progress-border::after{
     content:"";
     position:absolute; left:-1px; top:-1px;
@@ -80,7 +77,6 @@
     pointer-events:none;
   }
 
-  /* Subtitle */
   .subtitle{font-weight:800;color:var(--green-600);font-size:16px;margin:4px 0 10px}
   .big-pct{font-size:34px;font-weight:900;}
 
@@ -132,11 +128,13 @@
 
 <header class="app-header">
   <div class="container header-row">
-    <!-- Logo now links to index.html with hover effect -->
     <a class="logo-link" href="index.html" aria-label="Go to home">
       <img src="images/HI-Emblem-green.png" alt="Holiday Inn Club Vacations Emblem" class="logo-img">
     </a>
-    <button class="icon-btn" id="menuBtn" aria-label="Open menu"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div id="welcome" class="welcome" aria-live="polite"></div>
+      <button class="icon-btn" id="menuBtn" aria-label="Open menu"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    </div>
   </div>
 </header>
 
@@ -160,7 +158,6 @@
         </div>
 
         <div class="subtitle">Running % of Standard MTD</div>
-        <!-- Snapshot KPI boxes -->
         <div class="kpi-snap">
           <div class="box">
             <div class="label">Running % of Standard</div>
@@ -182,10 +179,9 @@
       </div>
     </section>
 
-    <!-- RIGHT COLUMN (stack): Today's Tours + Summary -->
+    <!-- RIGHT COLUMN -->
     <div class="stack">
 
-      <!-- Today's Tours -->
       <section class="card">
         <div class="card-header"><h2>Today’s Tours</h2></div>
         <div class="card-body">
@@ -202,11 +198,9 @@
         </div>
       </section>
 
-      <!-- Summary -->
       <section class="card">
         <div class="card-header"><h2>Summary</h2></div>
         <div class="card-body">
-          <!-- Days remaining subtitle -->
           <div class="subtitle" id="daysSubtitle">—</div>
 
           <div class="kpi">
@@ -227,7 +221,6 @@
               <div class="value" id="toursPerDay">—</div>
             </div>
 
-            <!-- % of Budget with progress border -->
             <div class="box progress-border" id="officialPctBox" style="--pct:0">
               <div class="label">% of Budget</div>
               <div class="value" id="officialPctValue">—</div>
@@ -238,7 +231,6 @@
               <div class="value" id="stdBoxValue">—</div>
             </div>
 
-            <!-- Overrides -->
             <div class="box">
               <div class="label">Lead Override</div>
               <div class="value" id="leadOverrideValue">—</div>
@@ -321,31 +313,50 @@
 </div>
 
 <script>
-(() => {
-  /* ===== Storage Keys ===== */
-  const LS_SELECTED_MONTH = 'selectedMonth';
-  const LS_DAILY_DATA = 'dailyGoalsActuals'; // { "Month-YYYY": {goals:[], actuals:[]} }
+/* =========================
+   Persist API (shared)
+   ========================= */
+const Persist = (() => {
+  const LOCAL_PREFIX = 'hi-calc:v1';
+  const key = (emp,page)=> `${LOCAL_PREFIX}:${emp}:${page}`;
+  async function load(emp,page){ if(!emp) return null; const raw = localStorage.getItem(key(emp,page)); return raw ? JSON.parse(raw) : null; }
+  async function save(emp,page,data){ if(!emp) return; localStorage.setItem(key(emp,page), JSON.stringify(data)); return true; }
+  function getLastEmployee(){ return localStorage.getItem(`${LOCAL_PREFIX}:last-employee`) || ''; }
+  return {load, save, getLastEmployee};
+})();
 
-  /* ===== Constants ===== */
+(() => {
+  /* ===== Employee context & guard ===== */
+  const welcomeEl = document.getElementById('welcome');
+  const lastEmp = Persist.getLastEmployee();
+  if(!lastEmp){
+    window.location.href = 'index.html';
+    return;
+  }
+  (async () => {
+    const sel = await Persist.load(lastEmp, 'calculator-selection');
+    const first = sel && sel.name ? String(sel.name) : '';
+    welcomeEl.textContent = first ? `Welcome, ${first}` : 'Welcome';
+  })();
+
+  /* ===== Page-scoped state (per employee) ===== */
+  const PAGE_ID = 'site-calculator';
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const MANAGER_RATE = 4.5; // $4.50 per tour
 
   /* ===== DOM ===== */
-  // Snapshot (month + running standard)
   const monthSel = document.getElementById('month');
   const runStdPctEl = document.getElementById('runStdPct');
   const runMTDActual = document.getElementById('runMTDActual');
   const runProjected = document.getElementById('runProjected');
   const runVariance = document.getElementById('runVariance');
 
-  // Today's tours quick entry
   const todayBigDate = document.getElementById('todayBigDate');
   const todayToursInput = document.getElementById('todayTours');
   const submitTodayBtn = document.getElementById('submitToday');
   const pushStatus = document.getElementById('pushStatus');
   const openDailyBtn = document.getElementById('openDaily');
 
-  // Summary nodes
   const daysSubtitle = document.getElementById('daysSubtitle');
   const budgetTours = document.getElementById('budgetTours');
   const teamGoalTours = document.getElementById('teamGoalTours');
@@ -357,7 +368,6 @@
   const leadOverrideValue = document.getElementById('leadOverrideValue');
   const mgrOverrideValue = document.getElementById('mgrOverrideValue');
 
-  // Menu (editor)
   const menuBtn = document.getElementById('menuBtn');
   const overlay = document.getElementById('menuOverlay');
   const closeMenu = document.getElementById('closeMenu');
@@ -375,27 +385,25 @@
   const csvFileInput = document.getElementById('csvFile');
   const importStatus = document.getElementById('importStatus');
 
-  /* ===== State / Helpers ===== */
-  let dailyDataMap = JSON.parse(localStorage.getItem(LS_DAILY_DATA) || '{}'); // key-> {goals:[], actuals:[]}
+  /* ===== Helpers ===== */
   const fmtInt = n => (isFinite(n) ? Math.round(n).toLocaleString() : '—');
-  const fmtSigned = n => (n>0?`+${fmtInt(n)}`: n<0?`-${fmtInt(Math.abs(n))}` : '0');
+  const fmtSigned = n => (n>0?`+${fmtInt(n)}` : n<0?`-${fmtInt(Math.abs(n))}` : '0');
   const clamp = (n,min,max)=>Math.min(Math.max(n,min),max);
   const monthIndex = (name) => MONTHS.indexOf(name);
-
-  // currency helpers
-  const currencyWhole = v => (+v || 0).toLocaleString(undefined,{
-    style:'currency', currency:'USD', minimumFractionDigits:0, maximumFractionDigits:0
-  });
-
-  const today = new Date(); // always now
+  const currencyWhole = v => (+v || 0).toLocaleString(undefined,{style:'currency',currency:'USD',minimumFractionDigits:0,maximumFractionDigits:0});
+  const today = new Date();
   const currentYear = today.getFullYear();
-
-  // Format "Oct. 1, 2025" (month short with period)
   function formatDateWithPeriod(d){
     const s = d.toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'});
     return s.replace(/^([A-Za-z]+)(\s)/, (m, mth, sp) => (mth.endsWith('.') ? mth : mth + '.') + sp);
   }
   todayBigDate.textContent = formatDateWithPeriod(today);
+
+  /* ===== Load/Save State ===== */
+  let state = null;
+  function defaultState(){ return { selectedMonth: MONTHS[new Date().getMonth()], year: currentYear, daily: {} }; }
+  async function loadState(){ state = await Persist.load(lastEmp, PAGE_ID); if(!state) state = defaultState(); }
+  async function saveState(){ await Persist.save(lastEmp, PAGE_ID, state); }
 
   function monthYearKey(monthName, year){ return `${monthName}-${year}`; }
   function daysInMonthByName(monthName, year){
@@ -404,47 +412,28 @@
   }
   function labelMD(monthNum0, day){ return `${monthNum0+1}/${day}`; }
 
-  // Return [elapsedDaysIncludingToday, totalDays]
-  function dayPositionForSelectedMonth(asOf, selectedMonthName, year){
-    const selIdx = monthIndex(selectedMonthName);
-    const asofIdx = asOf.getMonth();
-    const totalDays = daysInMonthByName(selectedMonthName, year);
-
-    let elapsed;
-    if (asofIdx === selIdx && asOf.getFullYear() === year) {
-      elapsed = Math.min(asOf.getDate(), totalDays); // include today
-    } else if (asOf.getFullYear() > year || (asOf.getFullYear() === year && asofIdx > selIdx)) {
-      elapsed = totalDays; // month in the past
-    } else {
-      elapsed = 0; // month in the future
-    }
-    return [elapsed, totalDays];
-  }
-
-  /* ===== Daily Data ===== */
   function ensureDailyData(month, year){
     const key = monthYearKey(month, year);
     const dcount = daysInMonthByName(month, year);
-    let rec = dailyDataMap[key];
+    let rec = state.daily[key];
     if(!rec || !Array.isArray(rec.goals) || !Array.isArray(rec.actuals)){
       rec = {goals:new Array(dcount).fill(0), actuals:new Array(dcount).fill(0)};
     }else{
       if(rec.goals.length !== dcount){ rec.goals = [...rec.goals, ...new Array(dcount).fill(0)].slice(0, dcount); }
       if(rec.actuals.length !== dcount){ rec.actuals = [...rec.actuals, ...new Array(dcount).fill(0)].slice(0, dcount); }
     }
-    dailyDataMap[key] = rec;
-    localStorage.setItem(LS_DAILY_DATA, JSON.stringify(dailyDataMap));
+    state.daily[key] = rec;
     return rec;
   }
 
   function renderDailyEditor(){
     const month = monthSel.value;
-    const year = currentYear;
+    const year = state.year || currentYear;
     const rec = ensureDailyData(month, year);
     const mIdx = monthIndex(month);
     const rows = rec.goals.map((g, i) => {
       const a = Number(rec.actuals[i]) || 0;
-      const dateLbl = labelMD(mIdx, i+1); // "M/D"
+      const dateLbl = labelMD(mIdx, i+1);
       return `
         <tr>
           <td>${dateLbl}</td>
@@ -470,14 +459,9 @@
     sumActual.textContent = fmtInt(actualSum);
   }
 
-  editorTableBody.addEventListener('input', e=>{
-    if(!e.target.matches('input[type="number"]')) return;
-    updateEditorSums();
-  });
-
-  function saveDailyData(){
+  function saveDailyDataFromEditor(){
     const month = monthSel.value;
-    const year = currentYear;
+    const year = state.year || currentYear;
     const dcount = editorTableBody.querySelectorAll('tr').length;
     const goals = new Array(dcount).fill(0);
     const actuals = new Array(dcount).fill(0);
@@ -487,8 +471,7 @@
       if(inp.dataset.col === 'goal') goals[day] = v;
       else if(inp.dataset.col === 'actual') actuals[day] = v;
     });
-    dailyDataMap[monthYearKey(month, year)] = {goals, actuals};
-    localStorage.setItem(LS_DAILY_DATA, JSON.stringify(dailyDataMap));
+    state.daily[monthYearKey(month, year)] = {goals, actuals};
   }
 
   /* ===== CSV Import / Export ===== */
@@ -514,21 +497,22 @@
   }
 
   function importCsvText(text){
+    // Update VISIBLE INPUTS (so the user sees it immediately), then they press Save to persist.
     const month = monthSel.value;
-    const yearDefault = currentYear;
-    const monthIdx = monthIndex(month); // 0-based
+    const yearDefault = state.year || currentYear;
+    const monthIdx = monthIndex(month);
     const dim = daysInMonthByName(month, yearDefault);
-
-    const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-    let updated = 0, skipped = 0, duplicates = 0;
 
     const goalInputs = [...editorTableBody.querySelectorAll('input[data-col="goal"]')];
     const actualInputs = [...editorTableBody.querySelectorAll('input[data-col="actual"]')];
 
+    const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    let updated = 0, skipped = 0, duplicates = 0;
+
     let startIdx = 0;
     if(lines.length){
       const first = lines[0].split(',')[0].trim();
-      if(!/^\d/.test(first)) startIdx = 1; // header
+      if(!/^\d/.test(first)) startIdx = 1; // header row
     }
 
     for(let i=startIdx; i<lines.length; i++){
@@ -562,19 +546,21 @@
       actualInputs[dayIndex].value = a;
       updated++;
     }
+
     return {updated, skipped, duplicates};
   }
 
   exportCsvBtn.addEventListener('click', () => {
+    // Export from STATE (saved data). If the panel has unsaved edits, click Save first.
     const month = monthSel.value;
-    const year = currentYear;
+    const year = state.year || currentYear;
     const rec = ensureDailyData(month, year);
     const mIdx = monthIndex(month);
     const dim = daysInMonthByName(month, year);
 
     let rows = [['Date','Goal','Actual']];
     for(let i=0;i<dim;i++){
-      const dateLbl = labelMD(mIdx, i+1); // M/D
+      const dateLbl = labelMD(mIdx, i+1);
       const g = Number(rec.goals[i])||0;
       const a = Number(rec.actuals[i])||0;
       rows.push([dateLbl, g, a]);
@@ -595,7 +581,7 @@
     setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
   });
 
-  /* ===== Override tiers (Lead) ===== */
+  /* ===== Lead Override tiers ===== */
   const LEAD_TIERS = [
     {min:101, max:102.99, rate:0.50},
     {min:103, max:106.99, rate:0.75},
@@ -609,43 +595,54 @@
   };
 
   /* ===== Core Calculations ===== */
-  function recalc(){
-    const asOf = new Date(); // today
-    const theMonth = monthSel.value;
-    const year = currentYear;
+  function dayPositionForSelectedMonth(asOf, selectedMonthName, year){
+    const selIdx = monthIndex(selectedMonthName);
+    const asofIdx = asOf.getMonth();
+    const totalDays = daysInMonthByName(selectedMonthName, year);
 
-    // elapsed includes today; remaining excludes today
+    let elapsed;
+    if (asofIdx === selIdx && asOf.getFullYear() === year) {
+      elapsed = Math.min(asOf.getDate(), totalDays); // include today
+    } else if (asOf.getFullYear() > year || (asOf.getFullYear() === year && asofIdx > selIdx)) {
+      elapsed = totalDays; // month in the past
+    } else {
+      elapsed = 0; // month in the future
+    }
+    return [elapsed, totalDays];
+  }
+
+  function recalc(){
+    const asOf = new Date();
+    const theMonth = monthSel.value;
+    const year = state.year || currentYear;
+
     const [elapsedDays, totalDays] = dayPositionForSelectedMonth(asOf, theMonth, year);
     const clampedElapsed = Math.max(0, Math.min(elapsedDays, totalDays));
     const daysRemaining = Math.max(0, totalDays - clampedElapsed);
 
+    const recKey = monthYearKey(theMonth, year);
     const rec = ensureDailyData(theMonth, year);
 
-    // Budget (official) & Team Goal (× 1.075)
     const budget = rec.goals.reduce((a,b)=>a+(Number(b)||0),0);
     const teamGoal = budget * 1.075;
 
-    // To-date metrics (include today)
     const mtdActual = rec.actuals.slice(0, clampedElapsed).reduce((a,b)=>a+(Number(b)||0), 0);
     const projectedToDate = rec.goals.slice(0, clampedElapsed).reduce((a,b)=>a+(Number(b)||0), 0);
 
     const remaining = Math.max(0, teamGoal - mtdActual);
     const dailyAvg = daysRemaining>0 ? (remaining / daysRemaining) : remaining;
 
-    // % of Budget (full-month basis)
     const pctBudget = budget>0 ? (mtdActual / budget)*100 : 0;
-
-    // % of Standard to date
     const pctStandard = projectedToDate>0 ? (mtdActual / projectedToDate)*100 : 0;
 
-    /* === Snapshot KPIs === */
     runStdPctEl.textContent = `${clamp(pctStandard,0,9999).toFixed(2)}%`;
     const variance = mtdActual - projectedToDate;
-    runVariance.textContent = (variance>0?'+':'') + fmtInt(Math.abs(variance));
+    runVariance.textContent = fmtSigned(variance);
+    runVariance.classList.toggle('good', variance >= 0);
+    runVariance.classList.toggle('bad', variance < 0);
     runMTDActual.textContent = fmtInt(mtdActual);
     runProjected.textContent = fmtInt(projectedToDate);
 
-    /* === Summary KPIs === */
     const dr = Math.max(0, totalDays - clampedElapsed);
     daysSubtitle.textContent = `${dr} day${dr===1?'':'s'} remaining`;
 
@@ -654,28 +651,25 @@
     remainingTours.textContent = fmtInt(remaining);
     toursPerDay.textContent = isFinite(dailyAvg) ? (dailyAvg<1 ? dailyAvg.toFixed(2) : fmtInt(dailyAvg)) : '—';
 
-    // % of Budget KPI + progress border fill
     const pctBudgetClamped = clamp(pctBudget,0,9999);
     officialPctValue.textContent = `${pctBudgetClamped.toFixed(1)}%`;
     officialPctBox.style.setProperty('--pct', Math.min(pctBudgetClamped,100).toFixed(1));
 
-    // % of Standard KPI
     stdBoxValue.textContent = `${clamp(pctStandard,0,9999).toFixed(1)}%`;
 
-    /* === Overrides — rounded to nearest dollar, show no decimals === */
-    const leadRate = rateForPct(pctStandard, LEAD_TIERS);  // tiered
-    const managerRate = MANAGER_RATE;                      // flat $4.50/tour
+    const leadRate = rateForPct(pctStandard, LEAD_TIERS);
+    const managerRate = MANAGER_RATE;
     leadOverrideValue.textContent = currencyWhole(Math.round(mtdActual * leadRate));
     mgrOverrideValue.textContent  = currencyWhole(Math.round(mtdActual * managerRate));
   }
 
   /* ===== Events ===== */
-  monthSel.addEventListener('change', () => {
-    localStorage.setItem(LS_SELECTED_MONTH, monthSel.value);
+  monthSel.addEventListener('change', async () => {
+    state.selectedMonth = monthSel.value;
+    await saveState();
     recalc();
   });
 
-  /* ===== Menu toggles ===== */
   function openMenu(){
     overlay.classList.add('show'); document.body.classList.add('no-scroll');
     renderDailyEditor();
@@ -690,12 +684,18 @@
   document.getElementById('menuOverlay').addEventListener('click', e => { if(e.target.id === 'menuOverlay') closeMenuPanel(); });
   document.addEventListener('keydown', e => { if(e.key === 'Escape' && document.getElementById('menuOverlay').classList.contains('show')) closeMenuPanel(); });
 
-  document.getElementById('saveAll').addEventListener('click', ()=>{ saveDailyData(); closeMenuPanel(); recalc(); });
-  document.getElementById('resetMonth').addEventListener('click', ()=>{
+  document.getElementById('saveAll').addEventListener('click', async ()=>{
+    saveDailyDataFromEditor();
+    await saveState();
+    closeMenuPanel();
+    recalc();
+  });
+
+  document.getElementById('resetMonth').addEventListener('click', async ()=>{
     if(!confirm('Clear all Goal & Actual values for this month?')) return;
-    const dcount = daysInMonthByName(monthSel.value, currentYear);
-    dailyDataMap[monthYearKey(monthSel.value, currentYear)] = {goals:new Array(dcount).fill(0), actuals:new Array(dcount).fill(0)};
-    localStorage.setItem(LS_DAILY_DATA, JSON.stringify(dailyDataMap));
+    const dcount = daysInMonthByName(monthSel.value, state.year || currentYear);
+    state.daily[monthYearKey(monthSel.value, state.year || currentYear)] = {goals:new Array(dcount).fill(0), actuals:new Array(dcount).fill(0)};
+    await saveState();
     renderDailyEditor(); recalc();
   });
 
@@ -705,13 +705,47 @@
     importStatus.textContent = '';
   });
 
-  /* ===== Init ===== */
-  const savedMonth = localStorage.getItem(LS_SELECTED_MONTH);
-  monthSel.value = savedMonth && [...monthSel.options].some(o => o.value===savedMonth)
-    ? savedMonth
-    : MONTHS[new Date().getMonth()];
+  /* ===== Quick set today's Actual ===== */
+  submitTodayBtn.addEventListener('click', async () => {
+    const val = Math.max(0, Math.floor(Number(todayToursInput.value) || 0));
+    const now = new Date();
+    const thisMonthName = MONTHS[now.getMonth()];
+    const year = state.year || now.getFullYear();
+    const dayIdx = now.getDate() - 1;
 
-  recalc(); // initial compute
+    const rec = ensureDailyData(thisMonthName, year);
+    const existing = Number(rec.actuals[dayIdx]) || 0;
+
+    if(existing !== 0 && existing !== val){
+      const ok = confirm(`Today already has ${existing}. Replace with ${val}?`);
+      if(!ok) return;
+    }
+
+    rec.actuals[dayIdx] = val;
+    state.daily[monthYearKey(thisMonthName, year)] = rec;
+    await saveState();
+
+    if(monthSel.value === thisMonthName){
+      recalc();
+    }
+
+    pushStatus.textContent = `Saved ${val} to ${thisMonthName} ${now.getDate()} Actual.`;
+    pushStatus.classList.add('success');
+    setTimeout(()=>{ pushStatus.textContent=''; pushStatus.classList.remove('success'); }, 3500);
+    todayToursInput.value = '';
+  });
+
+  /* ===== Init ===== */
+  (async function init(){
+    await loadState();
+
+    const savedMonth = state.selectedMonth;
+    monthSel.value = savedMonth && [...monthSel.options].some(o => o.value===savedMonth)
+      ? savedMonth
+      : MONTHS[new Date().getMonth()];
+
+    recalc();
+  })();
 })();
 </script>
 </body>
