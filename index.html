@@ -248,36 +248,9 @@ const Persist = (() => {
    ============ */
 (() => {
   document.body.classList.add('no-scroll');
+
   const splash = document.getElementById('splash');
   const progress = document.getElementById('progressBar');
-
-  function finishSplash(){
-    document.body.classList.add('app-ready');
-    document.body.classList.remove('no-scroll');
-    splash.style.display = 'none';
-  }
-  function startExit(){
-    splash.classList.add('out');
-    splash.addEventListener('animationend', function onEnd(e){
-      if(e.animationName==='splashFade'){
-        splash.removeEventListener('animationend', onEnd); finishSplash(); restoreIfRemembered();
-      }
-    });
-  }
-  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-  if(reduced){ finishSplash(); restoreIfRemembered(); } else { progress.addEventListener('animationend', startExit); }
-
-  /* DOM refs */
-  const empNumber = document.getElementById('empNumber');
-  const empName   = document.getElementById('empName');
-  const remember  = document.getElementById('rememberMe');
-  const signInBtn = document.getElementById('signInBtn');
-  const signinStatus = document.getElementById('signinStatus');
-  const welcomeLine  = document.getElementById('welcomeLine');
-
-  const selectEl = document.getElementById('calcSelect');
-  const descEl   = document.getElementById('calcDescription');
-  const submitBtn= document.getElementById('submitBtn');
 
   /* Modal */
   const REQUIRED_PASSWORD="bookem";
@@ -292,6 +265,71 @@ const Persist = (() => {
   const pwCancel=document.getElementById('pwCancel');
   const pwErr=document.getElementById('pwErr');
   const togglePw=document.getElementById('togglePw');
+
+  function forceReadyState(){
+    // kill any blocking overlays after back/forward restore
+    document.body.classList.add('app-ready');
+    document.body.classList.remove('no-scroll');
+
+    if(splash){
+      splash.classList.remove('out');
+      splash.style.display = 'none';
+    }
+    if(backdrop){
+      backdrop.style.display = 'none';
+      backdrop.setAttribute('aria-hidden','true');
+    }
+  }
+
+  function finishSplash(){
+    document.body.classList.add('app-ready');
+    document.body.classList.remove('no-scroll');
+    splash.style.display = 'none';
+  }
+
+  function startExit(){
+    // prevent double-trigger
+    if(!splash || splash.style.display === 'none') return;
+
+    splash.classList.add('out');
+    splash.addEventListener('animationend', function onEnd(e){
+      if(e.animationName==='splashFade'){
+        splash.removeEventListener('animationend', onEnd);
+        finishSplash();
+        restoreIfRemembered();
+      }
+    });
+  }
+
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+  if(reduced){
+    finishSplash();
+    restoreIfRemembered();
+  } else {
+    // Only trigger exit on the FINITE "fill" animation, and only once
+    progress.addEventListener('animationend', (e)=>{
+      if(e.animationName === 'fill') startExit();
+    }, { once:true });
+  }
+
+  // IMPORTANT: when returning via browser back (bfcache), force-unblock the page
+  window.addEventListener('pageshow', () => {
+    forceReadyState();
+    restoreIfRemembered();
+  });
+
+  /* DOM refs */
+  const empNumber = document.getElementById('empNumber');
+  const empName   = document.getElementById('empName');
+  const remember  = document.getElementById('rememberMe');
+  const signInBtn = document.getElementById('signInBtn');
+  const signinStatus = document.getElementById('signinStatus');
+  const welcomeLine  = document.getElementById('welcomeLine');
+
+  const selectEl = document.getElementById('calcSelect');
+  const descEl   = document.getElementById('calcDescription');
+  const submitBtn= document.getElementById('submitBtn');
 
   function setStatus(msg, show=true){
     signinStatus.textContent = msg || '';
@@ -311,7 +349,7 @@ const Persist = (() => {
   function toFirstName(s){
     const t = (s||'').trim();
     if(!t) return '';
-    return t.split(/\s+/)[0]; // first word only
+    return t.split(/\s+/)[0];
   }
 
   async function restoreIfRemembered(){
@@ -324,7 +362,11 @@ const Persist = (() => {
 
   async function restoreState(){
     const emp = normalizeEmp(empNumber.value);
-    if(!emp){ setStatus('Enter your employee number and first name to load saved progress.'); showWelcome(''); return; }
+    if(!emp){
+      setStatus('Enter your employee number and first name to load saved progress.');
+      showWelcome('');
+      return;
+    }
     setStatus('Loading your saved settings…');
     const saved = await Persist.load(emp, 'calculator-selection');
     if(saved && typeof saved === 'object'){
@@ -334,7 +376,7 @@ const Persist = (() => {
       updateDescription();
       setStatus(`Welcome back, ${first}! Your last selection has been restored.`);
       showWelcome(first);
-    }else{
+    } else {
       setStatus('No previous data found. Make a selection to get started.');
       showWelcome('');
     }
@@ -346,7 +388,8 @@ const Persist = (() => {
     if(!emp){ setStatus('Please enter a valid employee number.', true); empNumber.focus(); return; }
     if(!first){ setStatus('First name is required.', true); empName.focus(); return; }
 
-    if(remember.checked) Persist.setLastEmployee(emp); else Persist.clearLastEmployee();
+    if(remember.checked) Persist.setLastEmployee(emp);
+    else Persist.clearLastEmployee();
 
     await Persist.save(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() });
     setStatus(`Signed in as ${first}.`);
@@ -356,7 +399,7 @@ const Persist = (() => {
   async function saveSelection(){
     const emp = normalizeEmp(empNumber.value);
     const first = toFirstName(empName.value);
-    if(!emp || !first){ return; } // don't save until signed in properly
+    if(!emp || !first) return;
     await Persist.save(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() });
   }
 
@@ -377,21 +420,37 @@ const Persist = (() => {
   }
   function trySubmitPassword(){
     const val = (pwInput.value || '').trim();
-    if(val === REQUIRED_PASSWORD){ window.location.href = LINKS.site; }
-    else { pwErr.style.display='block'; pwInput.focus(); pwInput.select(); }
+    if(val === REQUIRED_PASSWORD){
+      // ensure modal cannot "stick" in history
+      closeModal();
+      window.location.href = LINKS.site;
+    } else {
+      pwErr.style.display='block';
+      pwInput.focus();
+      pwInput.select();
+    }
   }
 
   async function handleSubmit(){
-    const emp = normalizeEmp(empNumber.value);
-    const first = toFirstName(empName.value);
-    if(!emp){ setStatus('Enter your employee number before continuing.', true); empNumber.focus(); return; }
-    if(!first){ setStatus('First name is required.', true); empName.focus(); return; }
+    try{
+      const emp = normalizeEmp(empNumber.value);
+      const first = toFirstName(empName.value);
 
-    await saveSelection();
-    // Greet (in case they skipped the Sign In button)
-    showWelcome(first);
-    if(selectEl.value==='pay'){ window.location.href = LINKS.pay; }
-    else { openModal(); }
+      if(!emp){ setStatus('Enter your employee number before continuing.', true); empNumber.focus(); return; }
+      if(!first){ setStatus('First name is required.', true); empName.focus(); return; }
+
+      await saveSelection();
+      showWelcome(first);
+
+      if(selectEl.value==='pay'){
+        window.location.href = LINKS.pay;
+      } else {
+        openModal();
+      }
+    } catch (err){
+      console.error('Submit failed:', err);
+      setStatus('Something blocked navigation. Open console for details.', true);
+    }
   }
 
   /* Wire up */
@@ -401,9 +460,11 @@ const Persist = (() => {
   empName.addEventListener('keydown',  e=>{ if(e.key==='Enter') signIn(); });
 
   submitBtn.addEventListener('click', handleSubmit);
+
   pwCancel.addEventListener('click', closeModal);
   pwSubmit.addEventListener('click', trySubmitPassword);
   pwInput.addEventListener('keydown', e => { if(e.key==='Enter') trySubmitPassword(); });
+
   togglePw.addEventListener('click', ()=>{
     const showing = pwInput.type === 'text';
     pwInput.type = showing ? 'password' : 'text';
@@ -414,5 +475,6 @@ const Persist = (() => {
   updateDescription();
 })();
 </script>
+
 </body>
 </html>
