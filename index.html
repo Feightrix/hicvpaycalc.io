@@ -83,7 +83,7 @@
   body.app-ready main.container.app-shell{opacity:1;transform:none;visibility:visible;}
   .container{max-width:1100px;width:100%;margin:0 auto;padding:0 16px;}
   .header-row{display:flex;align-items:center;gap:12px;height:clamp(52px,7vw,96px);}
-  .logo-img{height:calc(100% - 10px);width:auto;object-fit:contain; content:url('images/HI-Emblem-green.png');}
+  .logo-img{height:calc(100% - 10px);width:auto;object-fit:contain;}
 
   .card{
     background:var(--paper);border:1px solid var(--border);border-radius:14px;
@@ -93,7 +93,7 @@
   }
   @keyframes cardIn{from{opacity:0;transform:translateY(14px)scale(0.97);}to{opacity:1;transform:none;}}
   .card-header{padding:16px 20px 10px;border-bottom:1px solid var(--border);
-    background:linear-gradient(180deg,color-mix(in srgb,var(--green)7%,#fff),#fff 80%);
+    background:linear-gradient(180deg, rgba(27,94,32,.07), #fff 80%);
     border-left:4px solid var(--orange);border-top-left-radius:14px;}
   .card-header h2{margin:0;font-size:18px;color:var(--green-600);}
   .card-body{padding:18px 20px;}
@@ -108,6 +108,7 @@
     padding:10px 18px;margin-top:16px;font-weight:700;border:1px solid var(--border);
     background:#fff;color:var(--green);cursor:pointer;transition:all .15s ease;}
   .btn:hover{border-color:#d1d5db;box-shadow:0 6px 16px rgba(0,0,0,.08);transform:translateY(-1px);}
+  .btn:disabled{opacity:.55; cursor:not-allowed; transform:none; box-shadow:none;}
   footer{position:fixed;bottom:10px;left:0;right:0;text-align:center;font-size:13px;color:#97a0aa;}
 
   /* Sign-in area */
@@ -133,8 +134,8 @@
   .err{margin-top:.6rem;color:#b71c1c;font-size:13px;display:none;}
 </style>
 </head>
-<body>
 
+<body>
 <!-- SPLASH -->
 <div class="splash" id="splash">
   <div class="splash-inner">
@@ -147,7 +148,7 @@
 <!-- HEADER -->
 <header class="app-header app-shell" id="appHeader">
   <div class="container header-row">
-    <img alt="Holiday Inn Club Vacations Emblem" class="logo-img">
+    <img src="images/HI-Emblem-green.png" alt="Holiday Inn Club Vacations Emblem" class="logo-img">
   </div>
 </header>
 
@@ -157,10 +158,8 @@
     <div class="card-header"><h2>Choose Your Calculator</h2></div>
     <div class="card-body">
 
-      <!-- Welcome line (appears after sign-in or restore) -->
       <div id="welcomeLine" class="welcome" aria-live="polite"></div>
 
-      <!-- Sign-in strip -->
       <div class="signin" id="signinSection">
         <div class="signin-row">
           <div class="input">
@@ -175,7 +174,6 @@
         <div id="signinStatus" class="desc" style="display:none;"></div>
       </div>
 
-      <!-- Calculator selection -->
       <div class="field">
         <div class="label">Select a tool</div>
         <div class="input">
@@ -185,9 +183,11 @@
           </select>
         </div>
       </div>
+
       <div id="calcDescription" class="desc">
         View your potential weekly pay breakdown and see how Master’s Trip points are calculated.
       </div>
+
       <button id="submitBtn" class="btn" type="button">Submit</button>
 
     </div>
@@ -215,32 +215,113 @@
   </div>
 </div>
 
+<!-- Supabase JS (v2) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script>
 /* =========================
-   Persist API (swap-ready)
+   Supabase + Local Fallback Persist
    ========================= */
 const Persist = (() => {
-  const USE_SUPABASE = false;
-  const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
-  const SUPABASE_ANON = 'YOUR_ANON_KEY';
-  const TABLE = 'calculator_state';
-  const LOCAL_PREFIX = 'hi-calc:v1';
-  const key = (emp,page)=> `${LOCAL_PREFIX}:${emp}:${page}`;
+  const SUPABASE_URL  = "https://mqiofvksgipmowyfjqjn.supabase.co";
+  const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaW9mdmtzZ2lwbW93eWZqcWpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwOTI1NTcsImV4cCI6MjA4MzY2ODU1N30.SRXzBegzmjvXcJHxIwH8sBSlWO6A2tsTC274wR-Ioe8";
 
-  async function load(emp,page){
-    if(!emp) return null;
-    const raw = localStorage.getItem(key(emp,page));
-    return raw ? JSON.parse(raw) : null;
+  const hasSupabase = !!(window.supabase && typeof window.supabase.createClient === "function");
+  const supabase = hasSupabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON) : null;
+
+  const LOCAL_PREFIX = "hi-calc:v2";
+  const lastKey   = `${LOCAL_PREFIX}:last-employee`;
+  const localSel  = `${LOCAL_PREFIX}:calculator-selection`; // local fallback for refresh/offline
+
+  // sessionStorage keeps navigation working even if "Remember me" is unchecked
+  function getLastEmployee(){
+    return sessionStorage.getItem(lastKey) || localStorage.getItem(lastKey) || "";
   }
-  async function save(emp,page,data){
+  function setLastEmployee(emp, persist=false){
     if(!emp) return;
-    localStorage.setItem(key(emp,page), JSON.stringify(data));
+    sessionStorage.setItem(lastKey, emp);
+    if(persist) localStorage.setItem(lastKey, emp);
+    else localStorage.removeItem(lastKey);
+  }
+  function clearLastEmployee(){
+    sessionStorage.removeItem(lastKey);
+    localStorage.removeItem(lastKey);
+  }
+
+  function loadLocalSelection(){
+    try{
+      const raw = localStorage.getItem(localSel) || sessionStorage.getItem(localSel);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }
+  function saveLocalSelection(dataObj, persist=false){
+    try{
+      const raw = JSON.stringify(dataObj || {});
+      sessionStorage.setItem(localSel, raw);
+      if(persist) localStorage.setItem(localSel, raw);
+      else localStorage.removeItem(localSel);
+    } catch {}
+  }
+
+  async function loadState(emp, page){
+    if(!supabase) return null;
+    const { data, error } = await supabase
+      .from("calculator_state")
+      .select("data")
+      .eq("employee_number", emp)
+      .eq("page", page)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? data.data : null;
+  }
+
+  async function saveState(emp, page, dataObj){
+    if(!supabase) return false;
+    const payload = {
+      employee_number: emp,
+      page: page,
+      data: dataObj,
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await supabase
+      .from("calculator_state")
+      .upsert(payload, { onConflict: "employee_number,page" });
+    if (error) throw error;
     return true;
   }
-  function getLastEmployee(){ return localStorage.getItem(`${LOCAL_PREFIX}:last-employee`) || ''; }
-  function setLastEmployee(emp){ if(emp) localStorage.setItem(`${LOCAL_PREFIX}:last-employee`, emp); }
-  function clearLastEmployee(){ localStorage.removeItem(`${LOCAL_PREFIX}:last-employee`); }
-  return {load, save, getLastEmployee, setLastEmployee, clearLastEmployee};
+
+  async function getProfile(emp){
+    if(!supabase) return null;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("employee_number, first_name")
+      .eq("employee_number", emp)
+      .maybeSingle();
+    if (error) throw error;
+    return data || null;
+  }
+
+  async function upsertProfile(emp, firstName){
+    if(!supabase) return false;
+    const payload = {
+      employee_number: emp,
+      first_name: firstName,
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await supabase
+      .from("profiles")
+      .upsert(payload, { onConflict: "employee_number" });
+    if (error) throw error;
+    return true;
+  }
+
+  return {
+    hasSupabase,
+    getLastEmployee, setLastEmployee, clearLastEmployee,
+    loadLocalSelection, saveLocalSelection,
+    loadState, saveState,
+    getProfile, upsertProfile
+  };
 })();
 
 /* ============
@@ -248,9 +329,66 @@ const Persist = (() => {
    ============ */
 (() => {
   document.body.classList.add('no-scroll');
-
   const splash = document.getElementById('splash');
   const progress = document.getElementById('progressBar');
+
+  let splashDone = false;
+
+  function finishSplash(){
+    if(splashDone) return;
+    splashDone = true;
+    document.body.classList.add('app-ready');
+    document.body.classList.remove('no-scroll');
+    splash.style.display = 'none';
+  }
+
+  async function afterSplash(){
+    // Restore immediately (local first), then try Supabase
+    await restoreIfRemembered();
+  }
+
+  function startExit(){
+    if(splashDone) return;
+    splash.classList.add('out');
+    splash.addEventListener('animationend', function onEnd(e){
+      if(e.animationName === 'splashFade'){
+        splash.removeEventListener('animationend', onEnd);
+        finishSplash();
+        afterSplash();
+      }
+    });
+  }
+
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+  // Hard fallback so splash NEVER traps the UI (covers Safari/background-tab edge cases)
+  const splashFailsafe = setTimeout(() => {
+    finishSplash();
+    afterSplash();
+  }, Math.max(3200, (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--splash-duration')) || 2500) + 1200));
+
+  if(reduced){
+    clearTimeout(splashFailsafe);
+    finishSplash();
+    afterSplash();
+  } else {
+    progress.addEventListener('animationend', () => {
+      clearTimeout(splashFailsafe);
+      startExit();
+    }, { once:true });
+  }
+
+  /* DOM refs */
+  const empNumber = document.getElementById('empNumber');
+  const empName   = document.getElementById('empName');
+  const remember  = document.getElementById('rememberMe');
+  const signInBtn = document.getElementById('signInBtn');
+  const signinStatus = document.getElementById('signinStatus');
+  const welcomeLine  = document.getElementById('welcomeLine');
+
+  const selectEl = document.getElementById('calcSelect');
+  const descEl   = document.getElementById('calcDescription');
+  const submitBtn= document.getElementById('submitBtn');
 
   /* Modal */
   const REQUIRED_PASSWORD="bookem";
@@ -266,71 +404,6 @@ const Persist = (() => {
   const pwErr=document.getElementById('pwErr');
   const togglePw=document.getElementById('togglePw');
 
-  function forceReadyState(){
-    // kill any blocking overlays after back/forward restore
-    document.body.classList.add('app-ready');
-    document.body.classList.remove('no-scroll');
-
-    if(splash){
-      splash.classList.remove('out');
-      splash.style.display = 'none';
-    }
-    if(backdrop){
-      backdrop.style.display = 'none';
-      backdrop.setAttribute('aria-hidden','true');
-    }
-  }
-
-  function finishSplash(){
-    document.body.classList.add('app-ready');
-    document.body.classList.remove('no-scroll');
-    splash.style.display = 'none';
-  }
-
-  function startExit(){
-    // prevent double-trigger
-    if(!splash || splash.style.display === 'none') return;
-
-    splash.classList.add('out');
-    splash.addEventListener('animationend', function onEnd(e){
-      if(e.animationName==='splashFade'){
-        splash.removeEventListener('animationend', onEnd);
-        finishSplash();
-        restoreIfRemembered();
-      }
-    });
-  }
-
-  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-
-  if(reduced){
-    finishSplash();
-    restoreIfRemembered();
-  } else {
-    // Only trigger exit on the FINITE "fill" animation, and only once
-    progress.addEventListener('animationend', (e)=>{
-      if(e.animationName === 'fill') startExit();
-    }, { once:true });
-  }
-
-  // IMPORTANT: when returning via browser back (bfcache), force-unblock the page
-  window.addEventListener('pageshow', () => {
-    forceReadyState();
-    restoreIfRemembered();
-  });
-
-  /* DOM refs */
-  const empNumber = document.getElementById('empNumber');
-  const empName   = document.getElementById('empName');
-  const remember  = document.getElementById('rememberMe');
-  const signInBtn = document.getElementById('signInBtn');
-  const signinStatus = document.getElementById('signinStatus');
-  const welcomeLine  = document.getElementById('welcomeLine');
-
-  const selectEl = document.getElementById('calcSelect');
-  const descEl   = document.getElementById('calcDescription');
-  const submitBtn= document.getElementById('submitBtn');
-
   function setStatus(msg, show=true){
     signinStatus.textContent = msg || '';
     signinStatus.style.display = show && msg ? 'block' : 'none';
@@ -345,65 +418,19 @@ const Persist = (() => {
     }
   }
 
-  function normalizeEmp(n){ return (n||'').replace(/\s+/g,'').padStart(6,'0'); }
+  function normalizeEmp(n){
+    const digits = String(n||'').replace(/[^\d]/g,'');
+    if(!digits) return '';
+    return digits.padStart(6,'0');
+  }
   function toFirstName(s){
     const t = (s||'').trim();
     if(!t) return '';
     return t.split(/\s+/)[0];
   }
-
-  async function restoreIfRemembered(){
-    const lastEmp = Persist.getLastEmployee();
-    if(!lastEmp) return;
-    empNumber.value = lastEmp;
-    remember.checked = true;
-    await restoreState();
+  function updateDescription(){
+    descEl.textContent = DESCRIPTIONS[selectEl.value] || "";
   }
-
-  async function restoreState(){
-    const emp = normalizeEmp(empNumber.value);
-    if(!emp){
-      setStatus('Enter your employee number and first name to load saved progress.');
-      showWelcome('');
-      return;
-    }
-    setStatus('Loading your saved settings…');
-    const saved = await Persist.load(emp, 'calculator-selection');
-    if(saved && typeof saved === 'object'){
-      const first = toFirstName(saved.name);
-      empName.value = first;
-      if(saved.selection) selectEl.value = saved.selection;
-      updateDescription();
-      setStatus(`Welcome back, ${first}! Your last selection has been restored.`);
-      showWelcome(first);
-    } else {
-      setStatus('No previous data found. Make a selection to get started.');
-      showWelcome('');
-    }
-  }
-
-  async function signIn(){
-    const emp = normalizeEmp(empNumber.value);
-    const first = toFirstName(empName.value);
-    if(!emp){ setStatus('Please enter a valid employee number.', true); empNumber.focus(); return; }
-    if(!first){ setStatus('First name is required.', true); empName.focus(); return; }
-
-    if(remember.checked) Persist.setLastEmployee(emp);
-    else Persist.clearLastEmployee();
-
-    await Persist.save(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() });
-    setStatus(`Signed in as ${first}.`);
-    showWelcome(first);
-  }
-
-  async function saveSelection(){
-    const emp = normalizeEmp(empNumber.value);
-    const first = toFirstName(empName.value);
-    if(!emp || !first) return;
-    await Persist.save(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() });
-  }
-
-  function updateDescription(){ descEl.textContent = DESCRIPTIONS[selectEl.value] || ""; }
 
   function openModal(){
     backdrop.style.display='flex';
@@ -421,9 +448,7 @@ const Persist = (() => {
   function trySubmitPassword(){
     const val = (pwInput.value || '').trim();
     if(val === REQUIRED_PASSWORD){
-      // ensure modal cannot "stick" in history
-      closeModal();
-      window.location.href = LINKS.site;
+      window.location.assign(LINKS.site);
     } else {
       pwErr.style.display='block';
       pwInput.focus();
@@ -431,31 +456,197 @@ const Persist = (() => {
     }
   }
 
-  async function handleSubmit(){
+  async function restoreIfRemembered(){
+    // Always restore local selection first (prevents "lost on refresh" even if Supabase is blocked)
+    const local = Persist.loadLocalSelection();
+    if(local && typeof local === "object"){
+      if(local.selection) selectEl.value = local.selection;
+      updateDescription();
+      if(local.name) showWelcome(toFirstName(local.name));
+    }
+
+    // Then restore employee/profile/state if we have an employee
+    const lastEmp = Persist.getLastEmployee();
+    if(!lastEmp){
+      if(!local) setStatus('Enter your employee number and first name to load saved progress.');
+      return;
+    }
+
+    empNumber.value = lastEmp;
+    remember.checked = !!localStorage.getItem("hi-calc:v2:last-employee");
+    await restoreState(); // Supabase (if available) refines/overrides
+  }
+
+  async function restoreState(){
+    const emp = normalizeEmp(empNumber.value);
+    if(!emp){
+      setStatus('Enter your employee number and first name to load saved progress.');
+      showWelcome('');
+      return;
+    }
+
+    // If Supabase isn't reachable, don't block UX (local already restored)
+    if(!Persist.hasSupabase){
+      setStatus('Saved locally on this device. (Database unavailable in this browser/session.)');
+      return;
+    }
+
+    setStatus('Loading your profile…');
+    submitBtn.disabled = true;
+
     try{
-      const emp = normalizeEmp(empNumber.value);
-      const first = toFirstName(empName.value);
+      const prof = await Persist.getProfile(emp);
+      if(prof && prof.first_name){
+        empName.value = toFirstName(prof.first_name);
+        showWelcome(toFirstName(prof.first_name));
+      }
 
-      if(!emp){ setStatus('Enter your employee number before continuing.', true); empNumber.focus(); return; }
-      if(!first){ setStatus('First name is required.', true); empName.focus(); return; }
+      setStatus('Loading your saved settings…');
+      const saved = await Persist.loadState(emp, 'calculator-selection');
 
-      await saveSelection();
+      if(saved && typeof saved === 'object'){
+        if(saved.selection) selectEl.value = saved.selection;
+        updateDescription();
+
+        // Mirror to local so refresh is always safe
+        Persist.saveLocalSelection({ name: toFirstName(saved.name || empName.value), selection: selectEl.value }, remember.checked);
+
+        const nm = toFirstName(empName.value);
+        setStatus(nm ? `Welcome back, ${nm}! Your last selection has been restored.` : 'Your last selection has been restored.');
+      } else {
+        setStatus('No previous selection found. Make a selection to get started.');
+      }
+    } catch(err){
+      console.error(err);
+      setStatus('Could not reach the database. Your selection will still be saved locally on this device.');
+    } finally {
+      submitBtn.disabled = false;
+    }
+  }
+
+  async function signIn(){
+    const emp = normalizeEmp(empNumber.value);
+    const first = toFirstName(empName.value);
+
+    if(!emp){ setStatus('Please enter a valid employee number.', true); empNumber.focus(); return; }
+    if(!first){ setStatus('First name is required.', true); empName.focus(); return; }
+
+    signInBtn.disabled = true;
+    submitBtn.disabled = true;
+    setStatus('Signing you in…');
+
+    try{
+      // Local always (so refresh works even if Supabase is blocked)
+      Persist.setLastEmployee(emp, remember.checked);
+      Persist.saveLocalSelection({ name:first, selection: selectEl.value }, remember.checked);
+
+      if(Persist.hasSupabase){
+        const existing = await Persist.getProfile(emp);
+        if(existing && existing.first_name){
+          const existingFirst = toFirstName(existing.first_name).toLowerCase();
+          if(existingFirst !== first.toLowerCase()){
+            setStatus(`That employee number is already registered to a different first name.`, true);
+            showWelcome('');
+            return;
+          }
+        }
+
+        await Persist.upsertProfile(emp, first);
+        await Persist.saveState(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() });
+      }
+
+      setStatus(`Signed in as ${first}.`);
+      showWelcome(first);
+    } catch(err){
+      console.error(err);
+      setStatus('Sign-in saved locally, but database access is blocked by policies/network.', true);
+      showWelcome(first);
+    } finally {
+      signInBtn.disabled = false;
+      submitBtn.disabled = false;
+    }
+  }
+
+  async function saveSelection(){
+    const emp = normalizeEmp(empNumber.value);
+    const first = toFirstName(empName.value);
+
+    // Always save locally (so refresh never “loses” selection)
+    Persist.saveLocalSelection({ name:first, selection: selectEl.value }, remember.checked);
+
+    if(!emp || !first) return;
+    if(!Persist.hasSupabase) return;
+
+    try{
+      await Persist.saveState(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() });
+    } catch(err){
+      console.error(err);
+      // silent - local still saved
+    }
+  }
+
+  async function handleSubmit(){
+    const emp = normalizeEmp(empNumber.value);
+    const first = toFirstName(empName.value);
+
+    if(!emp){ setStatus('Enter your employee number before continuing.', true); empNumber.focus(); return; }
+    if(!first){ setStatus('First name is required.', true); empName.focus(); return; }
+
+    submitBtn.disabled = true;
+    setStatus('Saving…');
+
+    try{
+      // Always set session so navigation survives even if they never clicked "Sign In"
+      Persist.setLastEmployee(emp, remember.checked);
+
+      // Save locally first (guaranteed)
+      Persist.saveLocalSelection({ name:first, selection: selectEl.value }, remember.checked);
+
+      // Supabase (if available)
+      if(Persist.hasSupabase){
+        const existing = await Persist.getProfile(emp);
+        if(existing && existing.first_name){
+          const existingFirst = toFirstName(existing.first_name).toLowerCase();
+          if(existingFirst !== first.toLowerCase()){
+            setStatus(`That employee number is already registered to a different first name.`, true);
+            showWelcome('');
+            submitBtn.disabled = false;
+            return;
+          }
+        } else {
+          await Persist.upsertProfile(emp, first);
+        }
+
+        await Persist.saveState(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() });
+      }
+
       showWelcome(first);
 
-      if(selectEl.value==='pay'){
-        window.location.href = LINKS.pay;
+      if(selectEl.value === 'pay'){
+        window.location.assign(LINKS.pay);
       } else {
         openModal();
       }
-    } catch (err){
-      console.error('Submit failed:', err);
-      setStatus('Something blocked navigation. Open console for details.', true);
+    } catch(err){
+      console.error(err);
+      setStatus('Saved locally, but database access failed. Continuing anyway…', true);
+
+      // Still continue (local is already saved)
+      if(selectEl.value === 'pay'){
+        window.location.assign(LINKS.pay);
+      } else {
+        openModal();
+      }
+    } finally {
+      // If we navigated, this won't matter; if modal opened, keep disabled state off
+      submitBtn.disabled = false;
     }
   }
 
   /* Wire up */
   selectEl.addEventListener('change', () => { updateDescription(); saveSelection(); });
   signInBtn.addEventListener('click', signIn);
+  empNumber.addEventListener('blur',  () => { empNumber.value = normalizeEmp(empNumber.value); });
   empNumber.addEventListener('keydown', e=>{ if(e.key==='Enter') signIn(); });
   empName.addEventListener('keydown',  e=>{ if(e.key==='Enter') signIn(); });
 
@@ -464,7 +655,6 @@ const Persist = (() => {
   pwCancel.addEventListener('click', closeModal);
   pwSubmit.addEventListener('click', trySubmitPassword);
   pwInput.addEventListener('keydown', e => { if(e.key==='Enter') trySubmitPassword(); });
-
   togglePw.addEventListener('click', ()=>{
     const showing = pwInput.type === 'text';
     pwInput.type = showing ? 'password' : 'text';
@@ -472,9 +662,14 @@ const Persist = (() => {
     pwInput.focus();
   });
 
+  // If user returns via browser back/forward cache, re-sync UI
+  window.addEventListener('pageshow', () => {
+    updateDescription();
+    // don't overwrite fields; just ensure description matches selection
+  });
+
   updateDescription();
 })();
 </script>
-
 </body>
 </html>
