@@ -220,13 +220,11 @@
 
 <script>
 /* =========================
-   Supabase Persist (profiles + state)
+   Supabase Persist (profiles + state) — HEADERED CLIENT (RLS)
    ========================= */
 const Persist = (() => {
   const SUPABASE_URL  = "https://mqiofvksgipmowyfjqjn.supabase.co";
   const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaW9mdmtzZ2lwbW93eWZqcWpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwOTI1NTcsImV4cCI6MjA4MzY2ODU1N30.SRXzBegzmjvXcJHxIwH8sBSlWO6A2tsTC274wR-Ioe8";
-
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
   const LOCAL_PREFIX = "hi-calc:v2";
   const lastKey = `${LOCAL_PREFIX}:last-employee`;
@@ -246,35 +244,82 @@ const Persist = (() => {
     localStorage.removeItem(lastKey);
   }
 
-  async function loadState(emp, page){
-    const { data, error } = await supabase
+  // simple local cache for chooser page state
+  const key = (emp,page)=> `${LOCAL_PREFIX}:${emp}:${page}`;
+  function localLoad(emp,page){
+    if(!emp) return null;
+    const raw =
+      localStorage.getItem(key(emp,page)) ||
+      sessionStorage.getItem(key(emp,page));
+    return raw ? JSON.parse(raw) : null;
+  }
+  function localSave(emp,page,data, persist=false){
+    if(!emp) return false;
+    const raw = JSON.stringify(data);
+    sessionStorage.setItem(key(emp,page), raw);
+    if(persist) localStorage.setItem(key(emp,page), raw);
+    else localStorage.removeItem(key(emp,page));
+    return true;
+  }
+
+  function safeFirstName(emp, firstName){
+    let safe = String(firstName || "").trim();
+    if(!safe){
+      const cached = localLoad(emp, "calculator-selection") || {};
+      safe = String(cached.name || "").trim();
+    }
+    if(!safe) safe = "Unknown";
+    return safe;
+  }
+
+  // ✅ Headered client per employee/name
+  let _client = null;
+  let _sig = "";
+  function clientFor(emp, firstName){
+    const safe = safeFirstName(emp, firstName);
+    const sig = `${emp}::${safe.toLowerCase()}`;
+    if(_client && _sig === sig) return _client;
+    _sig = sig;
+
+    _client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      global: {
+        headers: {
+          "x-employee-number": emp,
+          "x-first-name": safe
+        }
+      }
+    });
+    return _client;
+  }
+
+  async function loadState(emp, page, firstName=""){
+    const sb = clientFor(emp, firstName);
+    const { data, error } = await sb
       .from("calculator_state")
       .select("data,state")
       .eq("employee_number", emp)
       .eq("page", page)
       .maybeSingle();
 
-    if (error) throw error;
+    if(error) throw error;
     if(!data) return null;
     return (data.data ?? data.state ?? null);
   }
 
   async function saveState(emp, page, dataObj){
-    const safeName =
-      String((dataObj && dataObj.name) || "").trim()
-      || String(dataObj?.first_name || "").trim()
-      || "Unknown";
+    const safe = safeFirstName(emp, dataObj?.name || "");
+    const sb = clientFor(emp, safe);
 
     const payload = {
       employee_number: emp,
-      first_name: safeName,   // ✅ REQUIRED (NOT NULL in DB)
+      first_name: safe,   // ✅ NOT NULL in calculator_state
       page: page,
       data: dataObj,
       state: dataObj,
       updated_at: new Date().toISOString()
     };
 
-    const { error } = await supabase
+    const { error } = await sb
       .from("calculator_state")
       .upsert(payload, { onConflict: "employee_number,page" });
 
@@ -282,8 +327,9 @@ const Persist = (() => {
     return true;
   }
 
-  async function getProfile(emp){
-    const { data, error } = await supabase
+  async function getProfile(emp, firstName=""){
+    const sb = clientFor(emp, firstName);
+    const { data, error } = await sb
       .from("profiles")
       .select("employee_number, first_name")
       .eq("employee_number", emp)
@@ -294,13 +340,16 @@ const Persist = (() => {
   }
 
   async function upsertProfile(emp, firstName){
+    const safe = safeFirstName(emp, firstName);
+    const sb = clientFor(emp, safe);
+
     const payload = {
       employee_number: emp,
-      first_name: firstName,
+      first_name: safe,
       updated_at: new Date().toISOString()
     };
 
-    const { error } = await supabase
+    const { error } = await sb
       .from("profiles")
       .upsert(payload, { onConflict: "employee_number" });
 
@@ -310,6 +359,7 @@ const Persist = (() => {
 
   return {
     getLastEmployee, setLastEmployee, clearLastEmployee,
+    localLoad, localSave,
     loadState, saveState,
     getProfile, upsertProfile
   };
