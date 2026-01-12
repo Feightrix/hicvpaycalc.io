@@ -128,6 +128,7 @@
 
 <header class="app-header">
   <div class="container header-row">
+    <!-- ✅ keep home logo link, but don't rely on it for auth/state -->
     <a class="logo-link" href="index.html" aria-label="Go to home">
       <img src="images/HI-Emblem-green.png" alt="Holiday Inn Club Vacations Emblem" class="logo-img">
     </a>
@@ -191,8 +192,8 @@
             <div class="input"><input id="todayTours" type="number" min="0" step="1" placeholder="0" inputmode="numeric" aria-label="Today’s Showed Tours"></div>
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
-            <button class="btn" id="submitToday">Submit</button>
-            <button class="btn" id="openDaily">Edit Daily Goals & Actuals</button>
+            <button class="btn" id="submitToday" type="button">Submit</button>
+            <button class="btn" id="openDaily" type="button">Edit Daily Goals & Actuals</button>
             <span id="pushStatus" class="helper" aria-live="polite"></span>
           </div>
         </div>
@@ -283,9 +284,9 @@
           </table>
 
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
-            <button class="btn" id="clearAll">Clear All</button>
-            <button class="btn" id="importCsv">Import CSV</button>
-            <button class="btn" id="exportCsv">Export CSV</button>
+            <button class="btn" id="clearAll" type="button">Clear All</button>
+            <button class="btn" id="importCsv" type="button">Import CSV</button>
+            <button class="btn" id="exportCsv" type="button">Export CSV</button>
             <input type="file" id="csvFile" accept=".csv,text/csv" style="display:none">
           </div>
           <div id="importStatus" class="helper" aria-live="polite"></div>
@@ -312,32 +313,158 @@
   </aside>
 </div>
 
+<!-- Supabase JS (v2) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script>
 /* =========================
-   Persist API (shared)
+   Persist API (Supabase + Local fallback)
+   Uses your header-based RLS:
+     x-employee-number, x-first-name
    ========================= */
 const Persist = (() => {
-  const LOCAL_PREFIX = 'hi-calc:v1';
-  const key = (emp,page)=> `${LOCAL_PREFIX}:${emp}:${page}`;
-  async function load(emp,page){ if(!emp) return null; const raw = localStorage.getItem(key(emp,page)); return raw ? JSON.parse(raw) : null; }
-  async function save(emp,page,data){ if(!emp) return; localStorage.setItem(key(emp,page), JSON.stringify(data)); return true; }
-  function getLastEmployee(){ return localStorage.getItem(`${LOCAL_PREFIX}:last-employee`) || ''; }
-  return {load, save, getLastEmployee};
-})();
+  const SUPABASE_URL  = "https://mqiofvksgipmowyfjqjn.supabase.co";
+  const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaW9mdmtzZ2lwbW93eWZqcWpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwOTI1NTcsImV4cCI6MjA4MzY2ODU1N30.SRXzBegzmjvXcJHxIwH8sBSlWO6A2tsTC274wR-Ioe8";
 
-(() => {
-  /* ===== Employee context & guard ===== */
-  const welcomeEl = document.getElementById('welcome');
-  const lastEmp = Persist.getLastEmployee();
-  if(!lastEmp){
-    window.location.href = 'index.html';
-    return;
+  // IMPORTANT: must match your index.html prefix
+  const LOCAL_PREFIX = "hi-calc:v2";
+  const lastKey = `${LOCAL_PREFIX}:last-employee`;
+  const key = (emp,page)=> `${LOCAL_PREFIX}:${emp}:${page}`;
+
+  // ✅ FIX: index.html uses sessionStorage first; match it here so refresh/back won't bounce
+  function getLastEmployee(){
+    return sessionStorage.getItem(lastKey) || localStorage.getItem(lastKey) || "";
   }
-  (async () => {
-    const sel = await Persist.load(lastEmp, 'calculator-selection');
-    const first = sel && sel.name ? String(sel.name) : '';
-    welcomeEl.textContent = first ? `Welcome, ${first}` : 'Welcome';
-  })();
+
+  function localLoad(emp,page){
+    if(!emp) return null;
+    const raw =
+      localStorage.getItem(key(emp,page)) ||
+      sessionStorage.getItem(key(emp,page));
+    return raw ? JSON.parse(raw) : null;
+  }
+
+  function localSave(emp,page,data, persist=false){
+    if(!emp) return false;
+    const raw = JSON.stringify(data);
+    sessionStorage.setItem(key(emp,page), raw);
+    if(persist) localStorage.setItem(key(emp,page), raw);
+    else localStorage.removeItem(key(emp,page));
+    return true;
+  }
+
+  // Create a client AFTER we know employee + name, so headers are always present.
+  let _client = null;
+  let _hdrSig = "";
+  function clientFor(emp, firstName){
+    const sig = `${emp}::${String(firstName||"").toLowerCase()}`;
+    if(_client && _hdrSig === sig) return _client;
+
+    _hdrSig = sig;
+    _client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      global: {
+        headers: {
+          "x-employee-number": emp,
+          "x-first-name": String(firstName||"")
+        }
+      }
+    });
+    return _client;
+  }
+
+  async function load(emp, firstName, page){
+    const local = localLoad(emp, page);
+
+    try{
+      const sb = clientFor(emp, firstName);
+      const { data, error } = await sb
+        .from("calculator_state")
+        .select("state,data")
+        .eq("employee_number", emp)
+        .eq("page", page)
+        .maybeSingle();
+
+      if(error) throw error;
+
+      const payload = data ? (data.state ?? data.data ?? null) : null;
+      if(payload && typeof payload === "object"){
+        // ✅ mirror into session, and into local only if "remember" is enabled on device
+        // We don't know remember state here; we persist to session only.
+        localSave(emp, page, payload, false);
+        return payload;
+      }
+      return local || null;
+    }catch(err){
+      console.warn("[Persist.load] falling back to local/session:", err?.message || err);
+      return local || null;
+    }
+  }
+
+  async function save(emp, firstName, page, stateObj){
+    // ✅ Always write session immediately so refresh works
+    localSave(emp, page, stateObj, false);
+
+    try{
+      const sb = clientFor(emp, firstName);
+      const payload = {
+        employee_number: emp,
+        first_name: String(firstName||""),
+        page: page,
+        state: stateObj,
+        data: stateObj,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await sb
+        .from("calculator_state")
+        .upsert(payload, { onConflict: "employee_number,page" });
+
+      if(error) throw error;
+      return true;
+    }catch(err){
+      console.warn("[Persist.save] DB blocked/unreachable (session saved):", err?.message || err);
+      return false;
+    }
+  }
+
+  return { getLastEmployee, localLoad, localSave, load, save, lastKey };
+})();
+</script>
+
+<script>
+(() => {
+  /* ===== Employee context & guard (FIXED) ===== */
+  const welcomeEl = document.getElementById('welcome');
+
+  // ✅ Primary session source (prevents "kicking back to index" on refresh/back)
+  const lastEmp = Persist.getLastEmployee();
+
+  // Pull first name from either session/local selection cache
+  const sel = (lastEmp ? Persist.localLoad(lastEmp, 'calculator-selection') : null) || {};
+  const firstName = (sel && sel.name ? String(sel.name) : '').trim();
+
+  // ✅ Soft guard: only redirect if we have *neither* employee nor name.
+  // This prevents accidental redirects due to storage differences.
+  if(!lastEmp || !firstName){
+    // Try one more recovery pass: the chooser page also stores a simple local selection key
+    // (hi-calc:v2:calculator-selection) in some versions.
+    try{
+      const raw = localStorage.getItem("hi-calc:v2:calculator-selection") || sessionStorage.getItem("hi-calc:v2:calculator-selection");
+      const parsed = raw ? JSON.parse(raw) : null;
+      if(parsed && parsed.name){
+        welcomeEl.textContent = `Welcome, ${String(parsed.name).trim()}`;
+      } else {
+        // last resort: go home
+        window.location.replace('index.html');
+        return;
+      }
+    } catch {
+      window.location.replace('index.html');
+      return;
+    }
+  } else {
+    welcomeEl.textContent = `Welcome, ${firstName}`;
+  }
 
   /* ===== Page-scoped state (per employee) ===== */
   const PAGE_ID = 'site-calculator';
@@ -368,18 +495,10 @@ const Persist = (() => {
   const leadOverrideValue = document.getElementById('leadOverrideValue');
   const mgrOverrideValue = document.getElementById('mgrOverrideValue');
 
-  const menuBtn = document.getElementById('menuBtn');
   const overlay = document.getElementById('menuOverlay');
-  const closeMenu = document.getElementById('closeMenu');
-  const cancelEdit = document.getElementById('cancelEdit');
-  const saveAllBtn = document.getElementById('saveAll');
-  const resetMonthBtn = document.getElementById('resetMonth');
-
   const editorTableBody = document.querySelector('#editorTable tbody');
-  const clearAllBtn = document.getElementById('clearAll');
   const sumGoal = document.getElementById('sumGoal');
   const sumActual = document.getElementById('sumActual');
-
   const importCsvBtn = document.getElementById('importCsv');
   const exportCsvBtn = document.getElementById('exportCsv');
   const csvFileInput = document.getElementById('csvFile');
@@ -393,18 +512,18 @@ const Persist = (() => {
   const currencyWhole = v => (+v || 0).toLocaleString(undefined,{style:'currency',currency:'USD',minimumFractionDigits:0,maximumFractionDigits:0});
   const today = new Date();
   const currentYear = today.getFullYear();
+
   function formatDateWithPeriod(d){
     const s = d.toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'});
     return s.replace(/^([A-Za-z]+)(\s)/, (m, mth, sp) => (mth.endsWith('.') ? mth : mth + '.') + sp);
   }
   todayBigDate.textContent = formatDateWithPeriod(today);
 
-  /* ===== Load/Save State ===== */
+  /* ===== State ===== */
   let state = null;
-  function defaultState(){ return { selectedMonth: MONTHS[new Date().getMonth()], year: currentYear, daily: {} }; }
-  async function loadState(){ state = await Persist.load(lastEmp, PAGE_ID); if(!state) state = defaultState(); }
-  async function saveState(){ await Persist.save(lastEmp, PAGE_ID, state); }
-
+  function defaultState(){
+    return { selectedMonth: MONTHS[new Date().getMonth()], year: currentYear, daily: {} };
+  }
   function monthYearKey(monthName, year){ return `${monthName}-${year}`; }
   function daysInMonthByName(monthName, year){
     const m = monthIndex(monthName);
@@ -426,11 +545,29 @@ const Persist = (() => {
     return rec;
   }
 
+  async function loadState(){
+    // If we don't have a usable employee context, load default without redirect loops
+    const emp = lastEmp || "000000";
+    const nm = (firstName || "Guest").trim();
+    const loaded = await Persist.load(emp, nm, PAGE_ID);
+    state = (loaded && typeof loaded === 'object') ? loaded : defaultState();
+    if(!state.daily || typeof state.daily !== 'object') state.daily = {};
+    if(!state.year) state.year = currentYear;
+  }
+
+  async function saveState(){
+    const emp = lastEmp || "000000";
+    const nm = (firstName || "Guest").trim();
+    await Persist.save(emp, nm, PAGE_ID, state);
+  }
+
+  /* ===== Editor Render ===== */
   function renderDailyEditor(){
     const month = monthSel.value;
     const year = state.year || currentYear;
     const rec = ensureDailyData(month, year);
     const mIdx = monthIndex(month);
+
     const rows = rec.goals.map((g, i) => {
       const a = Number(rec.actuals[i]) || 0;
       const dateLbl = labelMD(mIdx, i+1);
@@ -442,6 +579,7 @@ const Persist = (() => {
         </tr>
       `;
     }).join('');
+
     editorTableBody.innerHTML = rows || `<tr><td colspan="3" style="color:#9aa3ad">No days</td></tr>`;
     updateEditorSums();
     importStatus.textContent = '';
@@ -463,14 +601,17 @@ const Persist = (() => {
     const month = monthSel.value;
     const year = state.year || currentYear;
     const dcount = editorTableBody.querySelectorAll('tr').length;
+
     const goals = new Array(dcount).fill(0);
     const actuals = new Array(dcount).fill(0);
+
     [...editorTableBody.querySelectorAll('input')].forEach(inp=>{
       const day = Number(inp.dataset.day)||0;
       const v = Math.max(0, Number(inp.value)||0);
       if(inp.dataset.col === 'goal') goals[day] = v;
       else if(inp.dataset.col === 'actual') actuals[day] = v;
     });
+
     state.daily[monthYearKey(month, year)] = {goals, actuals};
   }
 
@@ -497,7 +638,6 @@ const Persist = (() => {
   }
 
   function importCsvText(text){
-    // Update VISIBLE INPUTS (so the user sees it immediately), then they press Save to persist.
     const month = monthSel.value;
     const yearDefault = state.year || currentYear;
     const monthIdx = monthIndex(month);
@@ -512,7 +652,7 @@ const Persist = (() => {
     let startIdx = 0;
     if(lines.length){
       const first = lines[0].split(',')[0].trim();
-      if(!/^\d/.test(first)) startIdx = 1; // header row
+      if(!/^\d/.test(first)) startIdx = 1;
     }
 
     for(let i=startIdx; i<lines.length; i++){
@@ -524,6 +664,7 @@ const Persist = (() => {
       const dstr = parts[0];
       const mdy = dstr.split('/').map(s=>s.trim());
       if(mdy.length < 2){ skipped++; continue; }
+
       let m = Number(mdy[0]) || NaN;
       let d = Number(mdy[1]) || NaN;
       let y = mdy.length>=3 ? Number(mdy[2]) : yearDefault;
@@ -551,7 +692,6 @@ const Persist = (() => {
   }
 
   exportCsvBtn.addEventListener('click', () => {
-    // Export from STATE (saved data). If the panel has unsaved edits, click Save first.
     const month = monthSel.value;
     const year = state.year || currentYear;
     const rec = ensureDailyData(month, year);
@@ -602,11 +742,11 @@ const Persist = (() => {
 
     let elapsed;
     if (asofIdx === selIdx && asOf.getFullYear() === year) {
-      elapsed = Math.min(asOf.getDate(), totalDays); // include today
+      elapsed = Math.min(asOf.getDate(), totalDays);
     } else if (asOf.getFullYear() > year || (asOf.getFullYear() === year && asofIdx > selIdx)) {
-      elapsed = totalDays; // month in the past
+      elapsed = totalDays;
     } else {
-      elapsed = 0; // month in the future
+      elapsed = 0;
     }
     return [elapsed, totalDays];
   }
@@ -620,7 +760,6 @@ const Persist = (() => {
     const clampedElapsed = Math.max(0, Math.min(elapsedDays, totalDays));
     const daysRemaining = Math.max(0, totalDays - clampedElapsed);
 
-    const recKey = monthYearKey(theMonth, year);
     const rec = ensureDailyData(theMonth, year);
 
     const budget = rec.goals.reduce((a,b)=>a+(Number(b)||0),0);
@@ -630,7 +769,7 @@ const Persist = (() => {
     const projectedToDate = rec.goals.slice(0, clampedElapsed).reduce((a,b)=>a+(Number(b)||0), 0);
 
     const remaining = Math.max(0, teamGoal - mtdActual);
-    const dailyAvg = daysRemaining>0 ? (remaining / daysRemaining) : remaining;
+    const dailyAvg = (daysRemaining>0) ? (remaining / daysRemaining) : remaining;
 
     const pctBudget = budget>0 ? (mtdActual / budget)*100 : 0;
     const pctStandard = projectedToDate>0 ? (mtdActual / projectedToDate)*100 : 0;
@@ -663,27 +802,25 @@ const Persist = (() => {
     mgrOverrideValue.textContent  = currencyWhole(Math.round(mtdActual * managerRate));
   }
 
-  /* ===== Events ===== */
-  monthSel.addEventListener('change', async () => {
-    state.selectedMonth = monthSel.value;
-    await saveState();
-    recalc();
-  });
-
+  /* ===== Menu open/close ===== */
   function openMenu(){
-    overlay.classList.add('show'); document.body.classList.add('no-scroll');
+    overlay.classList.add('show');
+    document.body.classList.add('no-scroll');
     renderDailyEditor();
   }
   function closeMenuPanel(){
-    overlay.classList.remove('show'); document.body.classList.remove('no-scroll');
+    overlay.classList.remove('show');
+    document.body.classList.remove('no-scroll');
   }
+
   document.getElementById('menuBtn').addEventListener('click', openMenu);
   openDailyBtn.addEventListener('click', openMenu);
   document.getElementById('closeMenu').addEventListener('click', closeMenuPanel);
   document.getElementById('cancelEdit').addEventListener('click', closeMenuPanel);
-  document.getElementById('menuOverlay').addEventListener('click', e => { if(e.target.id === 'menuOverlay') closeMenuPanel(); });
-  document.addEventListener('keydown', e => { if(e.key === 'Escape' && document.getElementById('menuOverlay').classList.contains('show')) closeMenuPanel(); });
+  overlay.addEventListener('click', e => { if(e.target === overlay) closeMenuPanel(); });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape' && overlay.classList.contains('show')) closeMenuPanel(); });
 
+  /* ===== Save / Reset / Clear ===== */
   document.getElementById('saveAll').addEventListener('click', async ()=>{
     saveDailyDataFromEditor();
     await saveState();
@@ -696,13 +833,21 @@ const Persist = (() => {
     const dcount = daysInMonthByName(monthSel.value, state.year || currentYear);
     state.daily[monthYearKey(monthSel.value, state.year || currentYear)] = {goals:new Array(dcount).fill(0), actuals:new Array(dcount).fill(0)};
     await saveState();
-    renderDailyEditor(); recalc();
+    renderDailyEditor();
+    recalc();
   });
 
   document.getElementById('clearAll').addEventListener('click', ()=>{
     editorTableBody.querySelectorAll('input').forEach(inp=> inp.value = 0);
     updateEditorSums();
     importStatus.textContent = '';
+  });
+
+  /* ===== Month change ===== */
+  monthSel.addEventListener('change', async () => {
+    state.selectedMonth = monthSel.value;
+    await saveState();
+    recalc();
   });
 
   /* ===== Quick set today's Actual ===== */
@@ -723,6 +868,7 @@ const Persist = (() => {
 
     rec.actuals[dayIdx] = val;
     state.daily[monthYearKey(thisMonthName, year)] = rec;
+
     await saveState();
 
     if(monthSel.value === thisMonthName){
@@ -733,6 +879,12 @@ const Persist = (() => {
     pushStatus.classList.add('success');
     setTimeout(()=>{ pushStatus.textContent=''; pushStatus.classList.remove('success'); }, 3500);
     todayToursInput.value = '';
+  });
+
+  /* ===== Live sum updates in editor ===== */
+  editorTableBody.addEventListener('input', (e)=>{
+    const t = e.target;
+    if(t && t.matches('input[type="number"]')) updateEditorSums();
   });
 
   /* ===== Init ===== */
