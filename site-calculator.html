@@ -128,7 +128,6 @@
 
 <header class="app-header">
   <div class="container header-row">
-    <!-- ✅ keep home logo link, but don't rely on it for auth/state -->
     <a class="logo-link" href="index.html" aria-label="Go to home">
       <img src="images/HI-Emblem-green.png" alt="Holiday Inn Club Vacations Emblem" class="logo-img">
     </a>
@@ -318,20 +317,19 @@
 
 <script>
 /* =========================
-   Persist API (Supabase + Local fallback)
-   Uses your header-based RLS:
+   Persist API (Supabase + Local/session fallback)
+   Uses header-based RLS:
      x-employee-number, x-first-name
    ========================= */
 const Persist = (() => {
   const SUPABASE_URL  = "https://mqiofvksgipmowyfjqjn.supabase.co";
   const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaW9mdmtzZ2lwbW93eWZqcWpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwOTI1NTcsImV4cCI6MjA4MzY2ODU1N30.SRXzBegzmjvXcJHxIwH8sBSlWO6A2tsTC274wR-Ioe8";
 
-  // IMPORTANT: must match your index.html prefix
+  // IMPORTANT: must match your chooser/index prefix
   const LOCAL_PREFIX = "hi-calc:v2";
   const lastKey = `${LOCAL_PREFIX}:last-employee`;
   const key = (emp,page)=> `${LOCAL_PREFIX}:${emp}:${page}`;
 
-  // ✅ FIX: index.html uses sessionStorage first; match it here so refresh/back won't bounce
   function getLastEmployee(){
     return sessionStorage.getItem(lastKey) || localStorage.getItem(lastKey) || "";
   }
@@ -372,11 +370,22 @@ const Persist = (() => {
     return _client;
   }
 
+  function safeFirstName(emp, firstName){
+    let safe = String(firstName || "").trim();
+    if(!safe){
+      const cached = localLoad(emp, "calculator-selection") || {};
+      safe = String(cached.name || "").trim();
+    }
+    if(!safe) safe = "Unknown"; // satisfy NOT NULL in calculator_state.first_name
+    return safe;
+  }
+
   async function load(emp, firstName, page){
     const local = localLoad(emp, page);
+    const safe = safeFirstName(emp, firstName);
 
     try{
-      const sb = clientFor(emp, firstName);
+      const sb = clientFor(emp, safe);
       const { data, error } = await sb
         .from("calculator_state")
         .select("state,data")
@@ -388,8 +397,6 @@ const Persist = (() => {
 
       const payload = data ? (data.state ?? data.data ?? null) : null;
       if(payload && typeof payload === "object"){
-        // ✅ mirror into session, and into local only if "remember" is enabled on device
-        // We don't know remember state here; we persist to session only.
         localSave(emp, page, payload, false);
         return payload;
       }
@@ -401,14 +408,16 @@ const Persist = (() => {
   }
 
   async function save(emp, firstName, page, stateObj){
-    // ✅ Always write session immediately so refresh works
+    // Always write session immediately (refresh-safe)
     localSave(emp, page, stateObj, false);
 
+    const safe = safeFirstName(emp, firstName);
+
     try{
-      const sb = clientFor(emp, firstName);
+      const sb = clientFor(emp, safe);
       const payload = {
         employee_number: emp,
-        first_name: String(firstName||""),
+        first_name: safe,     // ✅ REQUIRED (NOT NULL in DB)
         page: page,
         state: stateObj,
         data: stateObj,
@@ -427,44 +436,28 @@ const Persist = (() => {
     }
   }
 
-  return { getLastEmployee, localLoad, localSave, load, save, lastKey };
+  return { getLastEmployee, localLoad, localSave, load, save };
 })();
 </script>
 
 <script>
 (() => {
-  /* ===== Employee context & guard (FIXED) ===== */
+  /* ===== Employee context & guard ===== */
   const welcomeEl = document.getElementById('welcome');
 
-  // ✅ Primary session source (prevents "kicking back to index" on refresh/back)
   const lastEmp = Persist.getLastEmployee();
 
-  // Pull first name from either session/local selection cache
+  // Pull first name from selection cache (session/local)
   const sel = (lastEmp ? Persist.localLoad(lastEmp, 'calculator-selection') : null) || {};
   const firstName = (sel && sel.name ? String(sel.name) : '').trim();
 
-  // ✅ Soft guard: only redirect if we have *neither* employee nor name.
-  // This prevents accidental redirects due to storage differences.
+  // Only redirect if we truly have nothing usable
   if(!lastEmp || !firstName){
-    // Try one more recovery pass: the chooser page also stores a simple local selection key
-    // (hi-calc:v2:calculator-selection) in some versions.
-    try{
-      const raw = localStorage.getItem("hi-calc:v2:calculator-selection") || sessionStorage.getItem("hi-calc:v2:calculator-selection");
-      const parsed = raw ? JSON.parse(raw) : null;
-      if(parsed && parsed.name){
-        welcomeEl.textContent = `Welcome, ${String(parsed.name).trim()}`;
-      } else {
-        // last resort: go home
-        window.location.replace('index.html');
-        return;
-      }
-    } catch {
-      window.location.replace('index.html');
-      return;
-    }
-  } else {
-    welcomeEl.textContent = `Welcome, ${firstName}`;
+    window.location.replace('index.html');
+    return;
   }
+
+  welcomeEl.textContent = `Welcome, ${firstName}`;
 
   /* ===== Page-scoped state (per employee) ===== */
   const PAGE_ID = 'site-calculator';
@@ -546,19 +539,14 @@ const Persist = (() => {
   }
 
   async function loadState(){
-    // If we don't have a usable employee context, load default without redirect loops
-    const emp = lastEmp || "000000";
-    const nm = (firstName || "Guest").trim();
-    const loaded = await Persist.load(emp, nm, PAGE_ID);
+    const loaded = await Persist.load(lastEmp, firstName, PAGE_ID);
     state = (loaded && typeof loaded === 'object') ? loaded : defaultState();
     if(!state.daily || typeof state.daily !== 'object') state.daily = {};
     if(!state.year) state.year = currentYear;
   }
 
   async function saveState(){
-    const emp = lastEmp || "000000";
-    const nm = (firstName || "Guest").trim();
-    await Persist.save(emp, nm, PAGE_ID, state);
+    await Persist.save(lastEmp, firstName, PAGE_ID, state);
   }
 
   /* ===== Editor Render ===== */
@@ -769,7 +757,7 @@ const Persist = (() => {
     const projectedToDate = rec.goals.slice(0, clampedElapsed).reduce((a,b)=>a+(Number(b)||0), 0);
 
     const remaining = Math.max(0, teamGoal - mtdActual);
-    const dailyAvg = (daysRemaining>0) ? (remaining / daysRemaining) : remaining;
+    const dailyAvg = daysRemaining>0 ? (remaining / daysRemaining) : remaining;
 
     const pctBudget = budget>0 ? (mtdActual / budget)*100 : 0;
     const pctStandard = projectedToDate>0 ? (mtdActual / projectedToDate)*100 : 0;
