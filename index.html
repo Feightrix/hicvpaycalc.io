@@ -134,8 +134,8 @@
   .err{margin-top:.6rem;color:#b71c1c;font-size:13px;display:none;}
 </style>
 </head>
-
 <body>
+
 <!-- SPLASH -->
 <div class="splash" id="splash">
   <div class="splash-inner">
@@ -220,18 +220,16 @@
 
 <script>
 /* =========================
-   Supabase + Local Fallback Persist
+   Supabase Persist (profiles + state)
    ========================= */
 const Persist = (() => {
   const SUPABASE_URL  = "https://mqiofvksgipmowyfjqjn.supabase.co";
   const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaW9mdmtzZ2lwbW93eWZqcWpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwOTI1NTcsImV4cCI6MjA4MzY2ODU1N30.SRXzBegzmjvXcJHxIwH8sBSlWO6A2tsTC274wR-Ioe8";
 
-  const hasSupabase = !!(window.supabase && typeof window.supabase.createClient === "function");
-  const supabase = hasSupabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON) : null;
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
   const LOCAL_PREFIX = "hi-calc:v2";
-  const lastKey   = `${LOCAL_PREFIX}:last-employee`;
-  const localSel  = `${LOCAL_PREFIX}:calculator-selection`; // local fallback for refresh/offline
+  const lastKey = `${LOCAL_PREFIX}:last-employee`;
 
   // sessionStorage keeps navigation working even if "Remember me" is unchecked
   function getLastEmployee(){
@@ -248,82 +246,77 @@ const Persist = (() => {
     localStorage.removeItem(lastKey);
   }
 
-  function loadLocalSelection(){
-    try{
-      const raw = localStorage.getItem(localSel) || sessionStorage.getItem(localSel);
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
-  }
-  function saveLocalSelection(dataObj, persist=false){
-    try{
-      const raw = JSON.stringify(dataObj || {});
-      sessionStorage.setItem(localSel, raw);
-      if(persist) localStorage.setItem(localSel, raw);
-      else localStorage.removeItem(localSel);
-    } catch {}
-  }
-
   async function loadState(emp, page){
-    if(!supabase) return null;
     const { data, error } = await supabase
       .from("calculator_state")
-      .select("data")
+      .select("data,state")
       .eq("employee_number", emp)
       .eq("page", page)
       .maybeSingle();
+
     if (error) throw error;
-    return data ? data.data : null;
+    if(!data) return null;
+    return (data.data ?? data.state ?? null);
   }
 
   async function saveState(emp, page, dataObj){
-    if(!supabase) return false;
+    const safeName =
+      String((dataObj && dataObj.name) || "").trim()
+      || String(dataObj?.first_name || "").trim()
+      || "Unknown";
+
     const payload = {
       employee_number: emp,
+      first_name: safeName,   // ✅ REQUIRED (NOT NULL in DB)
       page: page,
       data: dataObj,
+      state: dataObj,
       updated_at: new Date().toISOString()
     };
+
     const { error } = await supabase
       .from("calculator_state")
       .upsert(payload, { onConflict: "employee_number,page" });
+
     if (error) throw error;
     return true;
   }
 
   async function getProfile(emp){
-    if(!supabase) return null;
     const { data, error } = await supabase
       .from("profiles")
       .select("employee_number, first_name")
       .eq("employee_number", emp)
       .maybeSingle();
+
     if (error) throw error;
     return data || null;
   }
 
   async function upsertProfile(emp, firstName){
-    if(!supabase) return false;
     const payload = {
       employee_number: emp,
       first_name: firstName,
       updated_at: new Date().toISOString()
     };
+
     const { error } = await supabase
       .from("profiles")
       .upsert(payload, { onConflict: "employee_number" });
+
     if (error) throw error;
     return true;
   }
 
   return {
-    hasSupabase,
     getLastEmployee, setLastEmployee, clearLastEmployee,
-    loadLocalSelection, saveLocalSelection,
     loadState, saveState,
     getProfile, upsertProfile
   };
 })();
+</script>
 
+<script>
 /* ============
    Page Script
    ============ */
@@ -332,51 +325,24 @@ const Persist = (() => {
   const splash = document.getElementById('splash');
   const progress = document.getElementById('progressBar');
 
-  let splashDone = false;
-
   function finishSplash(){
-    if(splashDone) return;
-    splashDone = true;
     document.body.classList.add('app-ready');
     document.body.classList.remove('no-scroll');
     splash.style.display = 'none';
   }
-
-  async function afterSplash(){
-    // Restore immediately (local first), then try Supabase
-    await restoreIfRemembered();
-  }
-
   function startExit(){
-    if(splashDone) return;
     splash.classList.add('out');
     splash.addEventListener('animationend', function onEnd(e){
-      if(e.animationName === 'splashFade'){
+      if(e.animationName==='splashFade'){
         splash.removeEventListener('animationend', onEnd);
         finishSplash();
-        afterSplash();
+        restoreIfRemembered();
       }
     });
   }
-
   const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-
-  // Hard fallback so splash NEVER traps the UI (covers Safari/background-tab edge cases)
-  const splashFailsafe = setTimeout(() => {
-    finishSplash();
-    afterSplash();
-  }, Math.max(3200, (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--splash-duration')) || 2500) + 1200));
-
-  if(reduced){
-    clearTimeout(splashFailsafe);
-    finishSplash();
-    afterSplash();
-  } else {
-    progress.addEventListener('animationend', () => {
-      clearTimeout(splashFailsafe);
-      startExit();
-    }, { once:true });
-  }
+  if(reduced){ finishSplash(); restoreIfRemembered(); }
+  else { progress.addEventListener('animationend', startExit); }
 
   /* DOM refs */
   const empNumber = document.getElementById('empNumber');
@@ -448,7 +414,7 @@ const Persist = (() => {
   function trySubmitPassword(){
     const val = (pwInput.value || '').trim();
     if(val === REQUIRED_PASSWORD){
-      window.location.assign(LINKS.site);
+      window.location.href = LINKS.site;
     } else {
       pwErr.style.display='block';
       pwInput.focus();
@@ -457,24 +423,11 @@ const Persist = (() => {
   }
 
   async function restoreIfRemembered(){
-    // Always restore local selection first (prevents "lost on refresh" even if Supabase is blocked)
-    const local = Persist.loadLocalSelection();
-    if(local && typeof local === "object"){
-      if(local.selection) selectEl.value = local.selection;
-      updateDescription();
-      if(local.name) showWelcome(toFirstName(local.name));
-    }
-
-    // Then restore employee/profile/state if we have an employee
     const lastEmp = Persist.getLastEmployee();
-    if(!lastEmp){
-      if(!local) setStatus('Enter your employee number and first name to load saved progress.');
-      return;
-    }
-
+    if(!lastEmp) return;
     empNumber.value = lastEmp;
     remember.checked = !!localStorage.getItem("hi-calc:v2:last-employee");
-    await restoreState(); // Supabase (if available) refines/overrides
+    await restoreState();
   }
 
   async function restoreState(){
@@ -482,12 +435,6 @@ const Persist = (() => {
     if(!emp){
       setStatus('Enter your employee number and first name to load saved progress.');
       showWelcome('');
-      return;
-    }
-
-    // If Supabase isn't reachable, don't block UX (local already restored)
-    if(!Persist.hasSupabase){
-      setStatus('Saved locally on this device. (Database unavailable in this browser/session.)');
       return;
     }
 
@@ -499,6 +446,8 @@ const Persist = (() => {
       if(prof && prof.first_name){
         empName.value = toFirstName(prof.first_name);
         showWelcome(toFirstName(prof.first_name));
+      } else {
+        showWelcome('');
       }
 
       setStatus('Loading your saved settings…');
@@ -507,10 +456,6 @@ const Persist = (() => {
       if(saved && typeof saved === 'object'){
         if(saved.selection) selectEl.value = saved.selection;
         updateDescription();
-
-        // Mirror to local so refresh is always safe
-        Persist.saveLocalSelection({ name: toFirstName(saved.name || empName.value), selection: selectEl.value }, remember.checked);
-
         const nm = toFirstName(empName.value);
         setStatus(nm ? `Welcome back, ${nm}! Your last selection has been restored.` : 'Your last selection has been restored.');
       } else {
@@ -518,7 +463,7 @@ const Persist = (() => {
       }
     } catch(err){
       console.error(err);
-      setStatus('Could not reach the database. Your selection will still be saved locally on this device.');
+      setStatus('Could not reach the database. Check your table + policies, then refresh.');
     } finally {
       submitBtn.disabled = false;
     }
@@ -536,31 +481,27 @@ const Persist = (() => {
     setStatus('Signing you in…');
 
     try{
-      // Local always (so refresh works even if Supabase is blocked)
-      Persist.setLastEmployee(emp, remember.checked);
-      Persist.saveLocalSelection({ name:first, selection: selectEl.value }, remember.checked);
-
-      if(Persist.hasSupabase){
-        const existing = await Persist.getProfile(emp);
-        if(existing && existing.first_name){
-          const existingFirst = toFirstName(existing.first_name).toLowerCase();
-          if(existingFirst !== first.toLowerCase()){
-            setStatus(`That employee number is already registered to a different first name.`, true);
-            showWelcome('');
-            return;
-          }
+      const existing = await Persist.getProfile(emp);
+      if(existing && existing.first_name){
+        const existingFirst = toFirstName(existing.first_name).toLowerCase();
+        if(existingFirst !== first.toLowerCase()){
+          setStatus(`That employee number is already registered to a different first name.`, true);
+          showWelcome('');
+          return;
         }
-
-        await Persist.upsertProfile(emp, first);
-        await Persist.saveState(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() });
       }
+
+      await Persist.upsertProfile(emp, first);
+      await Persist.saveState(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() });
+
+      Persist.setLastEmployee(emp, remember.checked);
 
       setStatus(`Signed in as ${first}.`);
       showWelcome(first);
     } catch(err){
       console.error(err);
-      setStatus('Sign-in saved locally, but database access is blocked by policies/network.', true);
-      showWelcome(first);
+      setStatus('Sign-in failed. Most likely your Supabase policies are blocking access.', true);
+      showWelcome('');
     } finally {
       signInBtn.disabled = false;
       submitBtn.disabled = false;
@@ -570,18 +511,12 @@ const Persist = (() => {
   async function saveSelection(){
     const emp = normalizeEmp(empNumber.value);
     const first = toFirstName(empName.value);
-
-    // Always save locally (so refresh never “loses” selection)
-    Persist.saveLocalSelection({ name:first, selection: selectEl.value }, remember.checked);
-
     if(!emp || !first) return;
-    if(!Persist.hasSupabase) return;
 
     try{
       await Persist.saveState(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() });
     } catch(err){
       console.error(err);
-      // silent - local still saved
     }
   }
 
@@ -596,49 +531,32 @@ const Persist = (() => {
     setStatus('Saving…');
 
     try{
-      // Always set session so navigation survives even if they never clicked "Sign In"
-      Persist.setLastEmployee(emp, remember.checked);
-
-      // Save locally first (guaranteed)
-      Persist.saveLocalSelection({ name:first, selection: selectEl.value }, remember.checked);
-
-      // Supabase (if available)
-      if(Persist.hasSupabase){
-        const existing = await Persist.getProfile(emp);
-        if(existing && existing.first_name){
-          const existingFirst = toFirstName(existing.first_name).toLowerCase();
-          if(existingFirst !== first.toLowerCase()){
-            setStatus(`That employee number is already registered to a different first name.`, true);
-            showWelcome('');
-            submitBtn.disabled = false;
-            return;
-          }
-        } else {
-          await Persist.upsertProfile(emp, first);
+      const existing = await Persist.getProfile(emp);
+      if(existing && existing.first_name){
+        const existingFirst = toFirstName(existing.first_name).toLowerCase();
+        if(existingFirst !== first.toLowerCase()){
+          setStatus(`That employee number is already registered to a different first name.`, true);
+          showWelcome('');
+          submitBtn.disabled = false;
+          return;
         }
-
-        await Persist.saveState(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() });
+      } else {
+        await Persist.upsertProfile(emp, first);
       }
 
+      Persist.setLastEmployee(emp, remember.checked);
+
+      await saveSelection();
       showWelcome(first);
 
       if(selectEl.value === 'pay'){
-        window.location.assign(LINKS.pay);
+        window.location.href = LINKS.pay;
       } else {
         openModal();
       }
     } catch(err){
       console.error(err);
-      setStatus('Saved locally, but database access failed. Continuing anyway…', true);
-
-      // Still continue (local is already saved)
-      if(selectEl.value === 'pay'){
-        window.location.assign(LINKS.pay);
-      } else {
-        openModal();
-      }
-    } finally {
-      // If we navigated, this won't matter; if modal opened, keep disabled state off
+      setStatus('Could not save to the database. Check policies and try again.', true);
       submitBtn.disabled = false;
     }
   }
@@ -646,7 +564,6 @@ const Persist = (() => {
   /* Wire up */
   selectEl.addEventListener('change', () => { updateDescription(); saveSelection(); });
   signInBtn.addEventListener('click', signIn);
-  empNumber.addEventListener('blur',  () => { empNumber.value = normalizeEmp(empNumber.value); });
   empNumber.addEventListener('keydown', e=>{ if(e.key==='Enter') signIn(); });
   empName.addEventListener('keydown',  e=>{ if(e.key==='Enter') signIn(); });
 
@@ -660,12 +577,6 @@ const Persist = (() => {
     pwInput.type = showing ? 'password' : 'text';
     togglePw.textContent = showing ? 'Show' : 'Hide';
     pwInput.focus();
-  });
-
-  // If user returns via browser back/forward cache, re-sync UI
-  window.addEventListener('pageshow', () => {
-    updateDescription();
-    // don't overwrite fields; just ensure description matches selection
   });
 
   updateDescription();
