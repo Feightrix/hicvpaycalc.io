@@ -22,166 +22,623 @@
   }
   body.no-scroll{overflow:hidden;}
   body:not(.app-ready) .app-shell{visibility:hidden;}
-  /* SPLASH */
-  .splash{position:fixed; inset:0; z-index:9999; background:var(--green); display:flex; align-items:center; justify-content:center;}
-  .splash-inner{display:flex; flex-direction:column; gap:24px; align-items:center;}
-  .splash-logo{width:min(32vw,340px); opacity:0; animation:logoIn .6s ease-out .15s forwards;}
-  @keyframes logoIn{to{opacity:1}}
-  .bar-wrap{width:min(420px,84vw); height:12px; border-radius:999px; background:var(--bar-bg); overflow:hidden;}
-  .bar{height:100%; width:0%; background:#A5D6A7; animation:fill var(--splash-duration) forwards;}
-  @keyframes fill{to{width:100%}}
-  .splash.out{animation:splashFade .4s forwards;}
-  @keyframes splashFade{to{opacity:0}}
-  /* PAGE */
-  .container{max-width:520px;margin:0 auto;padding:24px}
-  .card{background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow)}
-  .card-header{padding:16px 20px;border-bottom:1px solid var(--border)}
-  .card-header h2{margin:0;color:var(--green-600)}
-  .card-body{padding:20px}
-  .field{margin-bottom:14px}
-  .input{border:1px solid var(--border);border-radius:12px;padding:10px 12px}
-  input,select{border:0;width:100%;font-size:16px;outline:0;background:transparent}
-  .btn{border-radius:999px;padding:10px 18px;border:1px solid var(--border);cursor:pointer;font-weight:700}
-  .btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
-  .desc{margin-top:10px;color:#6b7280;font-size:14px}
-  .welcome{font-weight:800;color:var(--green-600);margin-bottom:10px;display:none}
+
+  /* ================= SPLASH ================= */
+  .splash{
+    position:fixed; inset:0; z-index:9999;
+    background:var(--green);
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    text-align:center;
+  }
+  .splash-inner{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:24px; max-width:700px; transform: translateY(-5vh);
+  }
+  .splash-logo{
+    width:min(32vw,340px); height:auto; object-fit:contain;
+    opacity:0; transform:translateY(6px);
+    animation:logoIn .6s ease-out .15s forwards;
+    background:transparent; border:none; box-shadow:none;
+  }
+  @keyframes logoIn{to{opacity:1;transform:translateY(0);}}
+  @media(max-width:600px){.splash-logo{width:60vw; max-width:60vw;}}
+  .bar-wrap{
+    width:min(420px,84vw); height:12px; border-radius:999px; background:var(--bar-bg);
+    overflow:hidden; border:1px solid rgba(255,255,255,.28); box-shadow:inset 0 2px 6px rgba(255,255,255,.08);
+  }
+  .bar{
+    height:100%; width:0%; border-radius:999px;
+    background:linear-gradient(90deg,#78C27F 0%,#A5D6A7 50%,#78C27F 100%); background-size:200% 100%;
+    animation: fill var(--splash-duration) ease-out forwards, shimmer 1.8s linear infinite, glowPulse 2.4s ease-in-out infinite;
+  }
+  @keyframes fill{0%{width:0%}18%{width:18%}42%{width:40%}68%{width:70%}86%{width:86%}100%{width:100%}}
+  @keyframes shimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+  @keyframes glowPulse{0%,100%{box-shadow:0 0 10px rgba(255,255,255,0.18),0 0 22px rgba(255,255,255,0.10);}50%{box-shadow:0 0 22px rgba(255,255,255,0.35),0 0 40px rgba(255,255,255,0.18);}}
+  .splash::after{
+    content:""; position:absolute; inset:0; pointer-events:none; opacity:0;
+    background:linear-gradient(105deg,rgba(255,255,255,0)0%,rgba(255,255,255,.55)50%,rgba(255,255,255,0)100%);
+    transform:translateX(-120%)skewX(-8deg);
+  }
+  .splash.out::after{animation:sheenSweep .45s ease-out forwards;}
+  @keyframes sheenSweep{0%{opacity:0;transform:translateX(-120%)skewX(-8deg);}12%{opacity:.9;}100%{opacity:0;transform:translateX(120%)skewX(-8deg);}}
+  .splash.out{animation:splashFade .42s ease .25s forwards;}
+  @keyframes splashFade{to{opacity:0;}}
+  .splash-footer{position:fixed;left:0;right:0;bottom:10px;text-align:center;color:rgba(255,255,255,.8);font-size:12px;}
+
+  /* ================= PAGE ================= */
+  .app-header.app-shell{
+    position:sticky;top:0;z-index:20;
+    background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.85));
+    border-bottom:1px solid var(--border);
+    opacity:0;transform:translateY(8px);
+    transition:opacity var(--reveal-duration)ease,transform var(--reveal-duration)ease;
+  }
+  main.container.app-shell{
+    opacity:0;transform:translateY(8px);
+    transition:opacity var(--reveal-duration)ease,transform var(--reveal-duration)ease;
+    padding-top:24px;
+  }
+  body.app-ready .app-header.app-shell,
+  body.app-ready main.container.app-shell{opacity:1;transform:none;visibility:visible;}
+  .container{max-width:1100px;width:100%;margin:0 auto;padding:0 16px;}
+  .header-row{display:flex;align-items:center;gap:12px;height:clamp(52px,7vw,96px);}
+  .logo-img{height:calc(100% - 10px);width:auto;object-fit:contain;}
+
+  .card{
+    background:var(--paper);border:1px solid var(--border);border-radius:14px;
+    box-shadow:var(--shadow);width:min(520px,92vw);
+    opacity:0;transform:translateY(14px)scale(0.97); will-change:transform,opacity;
+    animation:cardIn var(--card-reveal)cubic-bezier(0.25,0.8,0.25,1) .15s forwards;
+  }
+  @keyframes cardIn{from{opacity:0;transform:translateY(14px)scale(0.97);}to{opacity:1;transform:none;}}
+  .card-header{padding:16px 20px 10px;border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg, rgba(27,94,32,.07), #fff 80%);
+    border-left:4px solid var(--orange);border-top-left-radius:14px;}
+  .card-header h2{margin:0;font-size:18px;color:var(--green-600);}
+  .card-body{padding:18px 20px;}
+  .field{display:grid;gap:8px;margin-bottom:14px;}
+  .label{font-weight:800;color:var(--green-600);font-size:16px;}
+  .input{display:flex;align-items:center;background:#fff;border:1px solid var(--border);
+    border-radius:12px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.04);}
+  select,input[type="text"],input[type="number"]{width:100%;border:0;outline:0;font-size:16px;background:transparent;color:var(--ink);}
+  .desc{margin-top:6px;padding:12px 14px;background:#fff;border:1px solid var(--border);
+    border-radius:12px;color:var(--muted);line-height:1.45;}
+  .btn{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;
+    padding:10px 18px;margin-top:16px;font-weight:700;border:1px solid var(--border);
+    background:#fff;color:var(--green);cursor:pointer;transition:all .15s ease;}
+  .btn:hover{border-color:#d1d5db;box-shadow:0 6px 16px rgba(0,0,0,.08);transform:translateY(-1px);}
+  .btn:disabled{opacity:.55; cursor:not-allowed; transform:none; box-shadow:none;}
+  footer{position:fixed;bottom:10px;left:0;right:0;text-align:center;font-size:13px;color:#97a0aa;}
+
+  /* Sign-in area */
+  .signin{display:grid;gap:10px;margin:4px 0 12px;}
+  .signin-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  @media(max-width:620px){.signin-row{grid-template-columns:1fr;}}
+  .remember{display:flex;align-items:center;gap:8px;color:#6b7280;font-size:14px;}
+  .remember input{width:auto;}
+  .welcome{margin:-2px 0 10px; color:var(--green-600); font-weight:800; display:none;}
+
+  /* Modal */
+  .modal-backdrop{position:fixed;inset:0;display:none;background:rgba(15,23,42,.45);
+    align-items:center;justify-content:center;padding:16px;z-index:60;}
+  .modal{width:min(420px,92vw);background:#fff;border-radius:16px;border:1px solid var(--border);
+    box-shadow:0 24px 64px rgba(0,0,0,.25);padding:20px;}
+  .modal h4{margin:0 0 .25rem;font-size:20px;color:var(--green-600);}
+  .modal p{margin:0 0 1rem;color:var(--muted);font-size:14px;}
+  .row{display:flex;gap:10px;align-items:center;}
+  .input-inline{flex:1;display:flex;align-items:center;gap:.5rem;border:1px solid var(--border);
+    border-radius:10px;padding:.7rem .8rem;background:#fff;}
+  .input-inline input{border:0;outline:0;width:100%;font-size:15px;}
+  .btn.secondary{background:#eef2f7;color:#111;border:1px solid var(--border);}
+  .err{margin-top:.6rem;color:#b71c1c;font-size:13px;display:none;}
 </style>
 </head>
-
-<body class="no-scroll">
+<body>
 
 <!-- SPLASH -->
 <div class="splash" id="splash">
   <div class="splash-inner">
-    <img src="images/HI-Emblem-White.png" class="splash-logo" alt="">
-    <div class="bar-wrap"><div class="bar"></div></div>
+    <img class="splash-logo" src="images/HI-Emblem-White.png" alt="Holiday Inn Club Vacations Emblem (White)">
+    <div class="bar-wrap"><div class="bar" id="progressBar"></div></div>
   </div>
+  <div class="splash-footer">Built by Feight © Copyright 2025</div>
 </div>
 
-<!-- APP -->
-<div class="container app-shell">
-  <div class="card">
-    <div class="card-header">
-      <h2>Choose Your Calculator</h2>
-    </div>
+<!-- HEADER -->
+<header class="app-header app-shell" id="appHeader">
+  <div class="container header-row">
+    <img src="images/HI-Emblem-green.png" alt="Holiday Inn Club Vacations Emblem" class="logo-img">
+  </div>
+</header>
+
+<!-- CONTENT -->
+<main class="container app-shell" id="mainContent">
+  <section class="card">
+    <div class="card-header"><h2>Choose Your Calculator</h2></div>
     <div class="card-body">
 
-      <div id="welcome" class="welcome"></div>
+      <div id="welcomeLine" class="welcome" aria-live="polite"></div>
 
-      <div class="field">
-        <div class="input">
-          <input id="empNumber" placeholder="Employee Number">
+      <div class="signin" id="signinSection">
+        <div class="signin-row">
+          <div class="input">
+            <input id="empNumber" type="text" inputmode="numeric" placeholder="Employee Number (e.g., 078195)" aria-label="Employee number" autocomplete="on">
+          </div>
+          <div class="input">
+            <input id="empName" type="text" placeholder="First name (required)" aria-label="First name" autocomplete="given-name">
+          </div>
         </div>
+        <label class="remember"><input id="rememberMe" type="checkbox"> Remember me on this device</label>
+        <button id="signInBtn" class="btn" type="button">Sign In</button>
+        <div id="signinStatus" class="desc" style="display:none;"></div>
       </div>
 
       <div class="field">
+        <div class="label">Select a tool</div>
         <div class="input">
-          <input id="empName" placeholder="First Name">
-        </div>
-      </div>
-
-      <div class="field">
-        <div class="input">
-          <select id="calcSelect">
+          <select id="calcSelect" aria-label="Choose calculator">
             <option value="pay">Pay Calculator</option>
             <option value="site">Site Calculator</option>
           </select>
         </div>
       </div>
 
-      <button id="signInBtn" class="btn primary">Continue</button>
-      <div id="status" class="desc"></div>
+      <div id="calcDescription" class="desc">
+        View your potential weekly pay breakdown and see how Master’s Trip points are calculated.
+      </div>
 
+      <button id="submitBtn" class="btn" type="button">Submit</button>
+
+    </div>
+  </section>
+</main>
+
+<footer class="app-shell" id="pageFooter">Built by Feight © Copyright 2025</footer>
+
+<!-- Password Modal -->
+<div class="modal-backdrop" id="pwBackdrop">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pwTitle" aria-describedby="pwDesc">
+    <h4 id="pwTitle">Enter Password</h4>
+    <p id="pwDesc">The Site Calculator requires a password to continue.</p>
+    <div class="row" style="margin-bottom:.75rem">
+      <div class="input-inline">
+        <input id="pwInput" type="password" placeholder="Password" autocomplete="current-password" />
+        <button class="btn secondary" id="togglePw" type="button" aria-label="Show or hide password">Show</button>
+      </div>
+      <button class="btn" id="pwSubmit" type="button">Continue</button>
+    </div>
+    <div class="err" id="pwErr">Incorrect password. Try again.</div>
+    <div class="row" style="justify-content:flex-end; margin-top:.5rem">
+      <button class="btn secondary" id="pwCancel" type="button">Cancel</button>
     </div>
   </div>
 </div>
 
-<!-- SUPABASE -->
+<!-- Supabase JS (v2) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
-/* SPLASH */
-const splash=document.getElementById("splash");
-setTimeout(()=>{
-  splash.classList.add("out");
-  document.body.classList.remove("no-scroll");
-  document.body.classList.add("app-ready");
-  splash.style.display="none";
-},2600);
+/* =========================
+   Supabase Persist (profiles + state) — HEADERED CLIENT (RLS) + explicit apikey/auth
+   ========================= */
+const Persist = (() => {
+  const SUPABASE_URL  = "https://mqiofvksgipmowyfjqjn.supabase.co";
+  const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaW9mdmtzZ2lwbW93eWZqcWpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwOTI1NTcsImV4cCI6MjA4MzY2ODU1N30.SRXzBegzmjvXcJHxIwH8sBSlWO6A2tsTC274wR-Ioe8";
 
-/* CONFIG */
-const SUPABASE_URL="https://mqiofvksgipmowyfjqjn.supabase.co";
-const SUPABASE_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaW9mdmtzZ2lwbW93eWZqcWpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwOTI1NTcsImV4cCI6MjA4MzY2ODU1N30.SRXzBegzmjvXcJHxIwH8sBSlWO6A2tsTC274wR-Ioe8";
-const PREFIX="hi-calc:v2";
+  const LOCAL_PREFIX = "hi-calc:v2";
+  const lastKey = `${LOCAL_PREFIX}:last-employee`;
 
-/* HELPERS */
-const normEmp=v=>String(v||"").replace(/\D/g,"").padStart(6,"0");
-const firstOnly=v=>String(v||"").trim().split(/\s+/)[0]||"Unknown";
+  // sessionStorage keeps navigation working even if "Remember me" is unchecked
+  function getLastEmployee(){
+    return sessionStorage.getItem(lastKey) || localStorage.getItem(lastKey) || "";
+  }
+  function setLastEmployee(emp, persist=false){
+    if(!emp) return;
+    sessionStorage.setItem(lastKey, emp);
+    if(persist) localStorage.setItem(lastKey, emp);
+    else localStorage.removeItem(lastKey);
+  }
+  function clearLastEmployee(){
+    sessionStorage.removeItem(lastKey);
+    localStorage.removeItem(lastKey);
+  }
 
-/* HEADERED CLIENT */
-function clientFor(emp,name){
-  return window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON,{
-    global:{headers:{
-      apikey:SUPABASE_ANON,
-      Authorization:`Bearer ${SUPABASE_ANON}`,
-      "x-employee-number":emp,
-      "x-first-name":name
-    }}
+  // simple local cache for chooser page state
+  const key = (emp,page)=> `${LOCAL_PREFIX}:${emp}:${page}`;
+  function localLoad(emp,page){
+    if(!emp) return null;
+    const raw =
+      localStorage.getItem(key(emp,page)) ||
+      sessionStorage.getItem(key(emp,page));
+    return raw ? JSON.parse(raw) : null;
+  }
+  function localSave(emp,page,data, persist=false){
+    if(!emp) return false;
+    const raw = JSON.stringify(data);
+    sessionStorage.setItem(key(emp,page), raw);
+    if(persist) localStorage.setItem(key(emp,page), raw);
+    else localStorage.removeItem(key(emp,page));
+    return true;
+  }
+
+  function safeFirstName(emp, firstName){
+    let safe = String(firstName || "").trim();
+    if(!safe){
+      const cached = localLoad(emp, "calculator-selection") || {};
+      safe = String(cached.name || "").trim();
+    }
+    if(!safe) safe = "Unknown";
+    return safe;
+  }
+
+  // ✅ Headered client per employee/name (with explicit apikey + Authorization to prevent 401)
+  let _client = null;
+  let _sig = "";
+  function clientFor(emp, firstName){
+    const safe = safeFirstName(emp, firstName);
+    const sig = `${emp}::${safe.toLowerCase()}`;
+    if(_client && _sig === sig) return _client;
+    _sig = sig;
+
+    _client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      global: {
+        headers: {
+          apikey: SUPABASE_ANON,
+          Authorization: `Bearer ${SUPABASE_ANON}`,
+          "x-employee-number": emp,
+          "x-first-name": safe
+        }
+      }
+    });
+    return _client;
+  }
+
+  async function loadState(emp, page, firstName=""){
+    const sb = clientFor(emp, firstName);
+    const { data, error } = await sb
+      .from("calculator_state")
+      .select("data,state")
+      .eq("employee_number", emp)
+      .eq("page", page)
+      .maybeSingle();
+
+    if(error) throw error;
+    if(!data) return null;
+    return (data.data ?? data.state ?? null);
+  }
+
+  async function saveState(emp, page, dataObj){
+    const safe = safeFirstName(emp, dataObj?.name || "");
+    const sb = clientFor(emp, safe);
+
+    const payload = {
+      employee_number: emp,
+      first_name: safe,   // ✅ NOT NULL in calculator_state
+      page: page,
+      data: dataObj,
+      state: dataObj,
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await sb
+      .from("calculator_state")
+      .upsert(payload, { onConflict: "employee_number,page" });
+
+    if (error) throw error;
+    return true;
+  }
+
+  async function getProfile(emp, firstName=""){
+    const sb = clientFor(emp, firstName);
+    const { data, error } = await sb
+      .from("profiles")
+      .select("employee_number, first_name")
+      .eq("employee_number", emp)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data || null;
+  }
+
+  async function upsertProfile(emp, firstName){
+    const safe = safeFirstName(emp, firstName);
+    const sb = clientFor(emp, safe);
+
+    const payload = {
+      employee_number: emp,
+      first_name: safe,
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await sb
+      .from("profiles")
+      .upsert(payload, { onConflict: "employee_number" });
+
+    if (error) throw error;
+    return true;
+  }
+
+  return {
+    getLastEmployee, setLastEmployee, clearLastEmployee,
+    localLoad, localSave,
+    loadState, saveState,
+    getProfile, upsertProfile
+  };
+})();
+</script>
+
+<script>
+/* ============
+   Page Script
+   ============ */
+(() => {
+  document.body.classList.add('no-scroll');
+  const splash = document.getElementById('splash');
+  const progress = document.getElementById('progressBar');
+
+  function finishSplash(){
+    document.body.classList.add('app-ready');
+    document.body.classList.remove('no-scroll');
+    splash.style.display = 'none';
+  }
+  function startExit(){
+    splash.classList.add('out');
+    splash.addEventListener('animationend', function onEnd(e){
+      if(e.animationName==='splashFade'){
+        splash.removeEventListener('animationend', onEnd);
+        finishSplash();
+        restoreIfRemembered();
+      }
+    });
+  }
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+  if(reduced){ finishSplash(); restoreIfRemembered(); }
+  else { progress.addEventListener('animationend', startExit); }
+
+  /* DOM refs */
+  const empNumber = document.getElementById('empNumber');
+  const empName   = document.getElementById('empName');
+  const remember  = document.getElementById('rememberMe');
+  const signInBtn = document.getElementById('signInBtn');
+  const signinStatus = document.getElementById('signinStatus');
+  const welcomeLine  = document.getElementById('welcomeLine');
+
+  const selectEl = document.getElementById('calcSelect');
+  const descEl   = document.getElementById('calcDescription');
+  const submitBtn= document.getElementById('submitBtn');
+
+  /* Modal */
+  const REQUIRED_PASSWORD="bookem";
+  const LINKS={ pay:"./site-selection.html", site:"./site-calculator.html" };
+  const DESCRIPTIONS={
+    pay:"View your potential weekly pay breakdown and see how Master’s Trip points are calculated.",
+    site:"Track pacing against budget and team goals with clear running totals and on-the-fly projections."
+  };
+  const backdrop=document.getElementById('pwBackdrop');
+  const pwInput=document.getElementById('pwInput');
+  const pwSubmit=document.getElementById('pwSubmit');
+  const pwCancel=document.getElementById('pwCancel');
+  const pwErr=document.getElementById('pwErr');
+  const togglePw=document.getElementById('togglePw');
+
+  function setStatus(msg, show=true){
+    signinStatus.textContent = msg || '';
+    signinStatus.style.display = show && msg ? 'block' : 'none';
+  }
+  function showWelcome(name){
+    if(name){
+      welcomeLine.textContent = `Welcome, ${name}!`;
+      welcomeLine.style.display = 'block';
+    } else {
+      welcomeLine.textContent = '';
+      welcomeLine.style.display = 'none';
+    }
+  }
+
+  function normalizeEmp(n){
+    const digits = String(n||'').replace(/[^\d]/g,'');
+    if(!digits) return '';
+    return digits.padStart(6,'0');
+  }
+  function toFirstName(s){
+    const t = (s||'').trim();
+    if(!t) return '';
+    return t.split(/\s+/)[0];
+  }
+  function updateDescription(){
+    descEl.textContent = DESCRIPTIONS[selectEl.value] || "";
+  }
+
+  function openModal(){
+    backdrop.style.display='flex';
+    backdrop.setAttribute('aria-hidden','false');
+    document.body.classList.add('no-scroll');
+    pwErr.style.display='none';
+    pwInput.value='';
+    setTimeout(()=>pwInput.focus(),30);
+  }
+  function closeModal(){
+    backdrop.style.display='none';
+    backdrop.setAttribute('aria-hidden','true');
+    document.body.classList.remove('no-scroll');
+  }
+  function trySubmitPassword(){
+    const val = (pwInput.value || '').trim();
+    if(val === REQUIRED_PASSWORD){
+      window.location.href = LINKS.site;
+    } else {
+      pwErr.style.display='block';
+      pwInput.focus();
+      pwInput.select();
+    }
+  }
+
+  async function restoreIfRemembered(){
+    const lastEmp = Persist.getLastEmployee();
+    if(!lastEmp) return;
+    empNumber.value = lastEmp;
+    remember.checked = !!localStorage.getItem("hi-calc:v2:last-employee");
+    await restoreState();
+  }
+
+  async function restoreState(){
+    const emp = normalizeEmp(empNumber.value);
+    if(!emp){
+      setStatus('Enter your employee number and first name to load saved progress.');
+      showWelcome('');
+      return;
+    }
+
+    // ✅ Use cached name (if any) for RLS headers; otherwise use current input.
+    const cachedSel = Persist.localLoad(emp, 'calculator-selection') || {};
+    const hdrName = toFirstName(empName.value) || toFirstName(cachedSel.name) || 'Unknown';
+
+    setStatus('Loading your profile…');
+    submitBtn.disabled = true;
+
+    try{
+      const prof = await Persist.getProfile(emp, hdrName);
+      if(prof && prof.first_name){
+        empName.value = toFirstName(prof.first_name);
+        showWelcome(toFirstName(prof.first_name));
+      } else {
+        showWelcome('');
+      }
+
+      setStatus('Loading your saved settings…');
+      const saved = await Persist.loadState(emp, 'calculator-selection', toFirstName(empName.value) || hdrName);
+
+      if(saved && typeof saved === 'object'){
+        if(saved.selection) selectEl.value = saved.selection;
+        updateDescription();
+        const nm = toFirstName(empName.value);
+        setStatus(nm ? `Welcome back, ${nm}! Your last selection has been restored.` : 'Your last selection has been restored.');
+      } else {
+        setStatus('No previous selection found. Make a selection to get started.');
+      }
+    } catch(err){
+      console.error(err);
+      setStatus('Could not reach the database. Check your table + policies, then refresh.');
+    } finally {
+      submitBtn.disabled = false;
+    }
+  }
+
+  async function signIn(){
+    const emp = normalizeEmp(empNumber.value);
+    const first = toFirstName(empName.value);
+
+    if(!emp){ setStatus('Please enter a valid employee number.', true); empNumber.focus(); return; }
+    if(!first){ setStatus('First name is required.', true); empName.focus(); return; }
+
+    signInBtn.disabled = true;
+    submitBtn.disabled = true;
+    setStatus('Signing you in…');
+
+    try{
+      // ✅ Pass first name so header-RLS matches
+      const existing = await Persist.getProfile(emp, first);
+      if(existing && existing.first_name){
+        const existingFirst = toFirstName(existing.first_name).toLowerCase();
+        if(existingFirst !== first.toLowerCase()){
+          setStatus(`That employee number is already registered to a different first name.`, true);
+          showWelcome('');
+          return;
+        }
+      }
+
+      await Persist.upsertProfile(emp, first);
+      await Persist.saveState(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() });
+
+      Persist.setLastEmployee(emp, remember.checked);
+
+      setStatus(`Signed in as ${first}.`);
+      showWelcome(first);
+    } catch(err){
+      console.error(err);
+      setStatus('Sign-in failed. Most likely your Supabase policies are blocking access.', true);
+      showWelcome('');
+    } finally {
+      signInBtn.disabled = false;
+      submitBtn.disabled = false;
+    }
+  }
+
+  async function saveSelection(){
+    const emp = normalizeEmp(empNumber.value);
+    const first = toFirstName(empName.value);
+    if(!emp || !first) return;
+
+    try{
+      await Persist.saveState(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() });
+    } catch(err){
+      console.error(err);
+    }
+  }
+
+  async function handleSubmit(){
+    const emp = normalizeEmp(empNumber.value);
+    const first = toFirstName(empName.value);
+
+    if(!emp){ setStatus('Enter your employee number before continuing.', true); empNumber.focus(); return; }
+    if(!first){ setStatus('First name is required.', true); empName.focus(); return; }
+
+    submitBtn.disabled = true;
+    setStatus('Saving…');
+
+    try{
+      // ✅ Pass first name so header-RLS matches
+      const existing = await Persist.getProfile(emp, first);
+      if(existing && existing.first_name){
+        const existingFirst = toFirstName(existing.first_name).toLowerCase();
+        if(existingFirst !== first.toLowerCase()){
+          setStatus(`That employee number is already registered to a different first name.`, true);
+          showWelcome('');
+          submitBtn.disabled = false;
+          return;
+        }
+      } else {
+        await Persist.upsertProfile(emp, first);
+      }
+
+      Persist.setLastEmployee(emp, remember.checked);
+
+      await saveSelection();
+      showWelcome(first);
+
+      if(selectEl.value === 'pay'){
+        window.location.href = LINKS.pay;
+      } else {
+        openModal();
+      }
+    } catch(err){
+      console.error(err);
+      setStatus('Could not save to the database. Check policies and try again.', true);
+      submitBtn.disabled = false;
+    }
+  }
+
+  /* Wire up */
+  selectEl.addEventListener('change', () => { updateDescription(); saveSelection(); });
+  signInBtn.addEventListener('click', signIn);
+  empNumber.addEventListener('keydown', e=>{ if(e.key==='Enter') signIn(); });
+  empName.addEventListener('keydown',  e=>{ if(e.key==='Enter') signIn(); });
+
+  submitBtn.addEventListener('click', handleSubmit);
+
+  pwCancel.addEventListener('click', closeModal);
+  pwSubmit.addEventListener('click', trySubmitPassword);
+  pwInput.addEventListener('keydown', e => { if(e.key==='Enter') trySubmitPassword(); });
+  togglePw.addEventListener('click', ()=>{
+    const showing = pwInput.type === 'text';
+    pwInput.type = showing ? 'password' : 'text';
+    togglePw.textContent = showing ? 'Show' : 'Hide';
+    pwInput.focus();
   });
-}
 
-/* DOM */
-const empInput=document.getElementById("empNumber");
-const nameInput=document.getElementById("empName");
-const btn=document.getElementById("signInBtn");
-const status=document.getElementById("status");
-const welcome=document.getElementById("welcome");
-const select=document.getElementById("calcSelect");
-
-/* SIGN IN */
-btn.onclick=async()=>{
-  status.textContent="";
-  const emp=normEmp(empInput.value);
-  const name=firstOnly(nameInput.value);
-
-  if(!emp||!name){
-    status.textContent="Employee number and first name required.";
-    return;
-  }
-
-  try{
-    const sb=clientFor(emp,name);
-
-    await sb.from("profiles").upsert({
-      employee_number:emp,
-      first_name:name,
-      updated_at:new Date().toISOString()
-    });
-
-    await sb.from("calculator_state").upsert({
-      employee_number:emp,
-      first_name:name,
-      page:"calculator-selection",
-      data:{name,selection:select.value},
-      state:{name,selection:select.value},
-      updated_at:new Date().toISOString()
-    });
-
-    sessionStorage.setItem(`${PREFIX}:last-employee`,emp);
-    sessionStorage.setItem(`${PREFIX}:${emp}:calculator-selection`,JSON.stringify({name}));
-
-    welcome.textContent=`Welcome, ${name}`;
-    welcome.style.display="block";
-
-    location.href=select.value==="pay"
-      ? "site-selection.html"
-      : "site-calculator.html";
-
-  }catch(err){
-    console.error(err);
-    status.textContent="Sign-in failed. Check console.";
-  }
-};
+  updateDescription();
+})();
 </script>
 </body>
 </html>
