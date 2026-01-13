@@ -145,7 +145,6 @@
 
 <header class="app-header">
   <div class="container header-row">
-    <!-- Clickable local logo with hover effect -->
     <a href="index.html" class="logo-link" aria-label="Home">
       <img src="images/HI-Emblem-green.png" alt="Holiday Inn Club Vacations Emblem" class="logo-img">
     </a>
@@ -182,28 +181,52 @@
 
 <script>
 /* =========================
-   Persist API (shared)
+   Persist API (v2, session-safe)
+   Matches index.html storage keys so this page DOES NOT bounce to index.
    ========================= */
 const Persist = (() => {
-  const LOCAL_PREFIX = 'hi-calc:v1';
+  const LOCAL_PREFIX = "hi-calc:v2";
+  const lastKey = `${LOCAL_PREFIX}:last-employee`;
   const key = (emp,page)=> `${LOCAL_PREFIX}:${emp}:${page}`;
-  async function load(emp,page){ if(!emp) return null; const raw = localStorage.getItem(key(emp,page)); return raw ? JSON.parse(raw) : null; }
-  async function save(emp,page,data){ if(!emp) return; localStorage.setItem(key(emp,page), JSON.stringify(data)); return true; }
-  function getLastEmployee(){ return localStorage.getItem(`${LOCAL_PREFIX}:last-employee`) || ''; }
-  return {load, save, getLastEmployee};
+
+  function getLastEmployee(){
+    return sessionStorage.getItem(lastKey) || localStorage.getItem(lastKey) || "";
+  }
+
+  function isRemembered(){
+    // If index stored lastKey in localStorage, user checked "Remember me"
+    return !!localStorage.getItem(lastKey);
+  }
+
+  async function load(emp,page){
+    if(!emp) return null;
+    const raw = sessionStorage.getItem(key(emp,page)) || localStorage.getItem(key(emp,page));
+    return raw ? JSON.parse(raw) : null;
+  }
+
+  async function save(emp,page,data){
+    if(!emp) return false;
+    const raw = JSON.stringify(data);
+    sessionStorage.setItem(key(emp,page), raw);
+    if(isRemembered()) localStorage.setItem(key(emp,page), raw);
+    else localStorage.removeItem(key(emp,page));
+    return true;
+  }
+
+  return { load, save, getLastEmployee };
 })();
 
 (() => {
   /* ===== Employee context & guard ===== */
   const welcomeEl = document.getElementById('welcome');
   const lastEmp = Persist.getLastEmployee();
+
   if(!lastEmp){
-    // No active session -> send back to splash / login
     window.location.href = 'index.html';
     return;
   }
 
-  // Pull first-name greeting from calculator-selection page state if present
+  /* Pull greeting from calculator-selection (saved by index.html locally) */
   (async () => {
     const sel = await Persist.load(lastEmp, 'calculator-selection');
     const first = sel && sel.name ? String(sel.name) : '';
@@ -212,7 +235,6 @@ const Persist = (() => {
 
   /* ===== Routing rules per site ===== */
   function pageForSite(id){
-    // Keep your existing mapping
     return (id === 'south-beach') ? 'HICV-MB-Pay-Calc.html' : 'HICV-General-Pay-Calc.html';
   }
 
@@ -273,10 +295,13 @@ const Persist = (() => {
     // One-time legacy import if the old key exists
     const legacy = localStorage.getItem('siteSelection');
     if(legacy){
-      // Validate legacy value
       const legacyId = String(legacy);
       if(SITES.some(s=>s.id===legacyId)){
-        await Persist.save(lastEmp, PAGE_ID, { selectedSiteId: legacyId, selectedSiteName: SITES.find(s=>s.id===legacyId).name, ts: Date.now() });
+        await Persist.save(lastEmp, PAGE_ID, {
+          selectedSiteId: legacyId,
+          selectedSiteName: SITES.find(s=>s.id===legacyId).name,
+          ts: Date.now()
+        });
       }
       localStorage.removeItem('siteSelection');
     }
@@ -320,7 +345,6 @@ const Persist = (() => {
       c.tabIndex=i===0?0:-1;
     });
     siteGrid.querySelector('.site-card')?.focus();
-    // Clear only this page's state (keep employee/session)
     await Persist.save(lastEmp, PAGE_ID, { selectedSiteId: '', selectedSiteName: '', ts: Date.now() });
   }
 
