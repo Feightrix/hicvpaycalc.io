@@ -549,9 +549,11 @@ const Persist = (() => {
       }
 
       await Persist.upsertProfile(emp, first);
+      Persist.localSave(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() }, remember.checked);
       await Persist.saveState(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() });
 
       Persist.setLastEmployee(emp, remember.checked);
+      Persist.localSave(emp, 'calculator-selection', { name:first, selection: selectEl.value, ts: Date.now() }, remember.checked);
 
       setStatus(`Signed in as ${first}.`);
       showWelcome(first);
