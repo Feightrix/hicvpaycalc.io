@@ -191,8 +191,8 @@
             <div class="input"><input id="todayTours" type="number" min="0" step="1" placeholder="0" inputmode="numeric" aria-label="Today’s Showed Tours"></div>
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
-            <button class="btn" id="submitToday" type="button">Submit</button>
-            <button class="btn" id="openDaily" type="button">Edit Daily Goals & Actuals</button>
+            <button class="btn" id="submitToday">Submit</button>
+            <button class="btn" id="openDaily">Edit Daily Goals & Actuals</button>
             <span id="pushStatus" class="helper" aria-live="polite"></span>
           </div>
         </div>
@@ -283,9 +283,9 @@
           </table>
 
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
-            <button class="btn" id="clearAll" type="button">Clear All</button>
-            <button class="btn" id="importCsv" type="button">Import CSV</button>
-            <button class="btn" id="exportCsv" type="button">Export CSV</button>
+            <button class="btn" id="clearAll">Clear All</button>
+            <button class="btn" id="importCsv">Import CSV</button>
+            <button class="btn" id="exportCsv">Export CSV</button>
             <input type="file" id="csvFile" accept=".csv,text/csv" style="display:none">
           </div>
           <div id="importStatus" class="helper" aria-live="polite"></div>
@@ -317,37 +317,38 @@
 
 <script>
 /* =========================
-   Persist API (Supabase + Local/session fallback)
-   Uses header-based RLS:
+   Persist API (Supabase + Local fallback)
+   Uses your header-based RLS:
      x-employee-number, x-first-name
    ========================= */
 const Persist = (() => {
   const SUPABASE_URL  = "https://mqiofvksgipmowyfjqjn.supabase.co";
   const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaW9mdmtzZ2lwbW93eWZqcWpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwOTI1NTcsImV4cCI6MjA4MzY2ODU1N30.SRXzBegzmjvXcJHxIwH8sBSlWO6A2tsTC274wR-Ioe8";
 
-  // IMPORTANT: must match your chooser/index prefix
+  // IMPORTANT: must match your index.html prefix
   const LOCAL_PREFIX = "hi-calc:v2";
   const lastKey = `${LOCAL_PREFIX}:last-employee`;
   const key = (emp,page)=> `${LOCAL_PREFIX}:${emp}:${page}`;
 
+  // ✅ FIX: sessionStorage first (so navigation works even without Remember Me)
   function getLastEmployee(){
     return sessionStorage.getItem(lastKey) || localStorage.getItem(lastKey) || "";
   }
 
+  // ✅ FIX: read sessionStorage OR localStorage
   function localLoad(emp,page){
     if(!emp) return null;
-    const raw =
-      localStorage.getItem(key(emp,page)) ||
-      sessionStorage.getItem(key(emp,page));
+    const raw = sessionStorage.getItem(key(emp,page)) || localStorage.getItem(key(emp,page));
     return raw ? JSON.parse(raw) : null;
   }
 
-  function localSave(emp,page,data, persist=false){
+  // ✅ write session always; localStorage optional use remains on chooser page
+  function localSave(emp,page,data){
     if(!emp) return false;
     const raw = JSON.stringify(data);
     sessionStorage.setItem(key(emp,page), raw);
-    if(persist) localStorage.setItem(key(emp,page), raw);
-    else localStorage.removeItem(key(emp,page));
+    // keep localStorage mirror as well for resiliency
+    localStorage.setItem(key(emp,page), raw);
     return true;
   }
 
@@ -362,6 +363,8 @@ const Persist = (() => {
     _client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
       global: {
         headers: {
+          apikey: SUPABASE_ANON,
+          Authorization: `Bearer ${SUPABASE_ANON}`,
           "x-employee-number": emp,
           "x-first-name": String(firstName||"")
         }
@@ -370,22 +373,11 @@ const Persist = (() => {
     return _client;
   }
 
-  function safeFirstName(emp, firstName){
-    let safe = String(firstName || "").trim();
-    if(!safe){
-      const cached = localLoad(emp, "calculator-selection") || {};
-      safe = String(cached.name || "").trim();
-    }
-    if(!safe) safe = "Unknown"; // satisfy NOT NULL in calculator_state.first_name
-    return safe;
-  }
-
   async function load(emp, firstName, page){
     const local = localLoad(emp, page);
-    const safe = safeFirstName(emp, firstName);
 
     try{
-      const sb = clientFor(emp, safe);
+      const sb = clientFor(emp, firstName);
       const { data, error } = await sb
         .from("calculator_state")
         .select("state,data")
@@ -397,27 +389,24 @@ const Persist = (() => {
 
       const payload = data ? (data.state ?? data.data ?? null) : null;
       if(payload && typeof payload === "object"){
-        localSave(emp, page, payload, false);
+        localSave(emp, page, payload);
         return payload;
       }
       return local || null;
     }catch(err){
-      console.warn("[Persist.load] falling back to local/session:", err?.message || err);
+      console.warn("[Persist.load] falling back to localStorage:", err?.message || err);
       return local || null;
     }
   }
 
   async function save(emp, firstName, page, stateObj){
-    // Always write session immediately (refresh-safe)
-    localSave(emp, page, stateObj, false);
-
-    const safe = safeFirstName(emp, firstName);
+    localSave(emp, page, stateObj);
 
     try{
-      const sb = clientFor(emp, safe);
+      const sb = clientFor(emp, firstName);
       const payload = {
         employee_number: emp,
-        first_name: safe,     // ✅ REQUIRED (NOT NULL in DB)
+        first_name: String(firstName||""), // must be NOT NULL per your schema
         page: page,
         state: stateObj,
         data: stateObj,
@@ -431,7 +420,7 @@ const Persist = (() => {
       if(error) throw error;
       return true;
     }catch(err){
-      console.warn("[Persist.save] DB blocked/unreachable (session saved):", err?.message || err);
+      console.warn("[Persist.save] DB blocked/unreachable (local saved):", err?.message || err);
       return false;
     }
   }
@@ -446,14 +435,17 @@ const Persist = (() => {
   const welcomeEl = document.getElementById('welcome');
 
   const lastEmp = Persist.getLastEmployee();
+  if(!lastEmp){
+    window.location.href = 'index.html';
+    return;
+  }
 
-  // Pull first name from selection cache (session/local)
-  const sel = (lastEmp ? Persist.localLoad(lastEmp, 'calculator-selection') : null) || {};
+  // Pull first name from the selection page cache (index.html writes it there)
+  const sel = Persist.localLoad(lastEmp, 'calculator-selection') || {};
   const firstName = (sel && sel.name ? String(sel.name) : '').trim();
 
-  // Only redirect if we truly have nothing usable
-  if(!lastEmp || !firstName){
-    window.location.replace('index.html');
+  if(!firstName){
+    window.location.href = 'index.html';
     return;
   }
 
@@ -867,12 +859,6 @@ const Persist = (() => {
     pushStatus.classList.add('success');
     setTimeout(()=>{ pushStatus.textContent=''; pushStatus.classList.remove('success'); }, 3500);
     todayToursInput.value = '';
-  });
-
-  /* ===== Live sum updates in editor ===== */
-  editorTableBody.addEventListener('input', (e)=>{
-    const t = e.target;
-    if(t && t.matches('input[type="number"]')) updateEditorSums();
   });
 
   /* ===== Init ===== */
